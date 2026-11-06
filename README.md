@@ -20,7 +20,7 @@ The runtime is designed to work after installation with the network disconnected
 
 ## Project status
 
-**Family tree integration prototype.** The solution contains host tool contracts, a WPF chat control, a sample WPF host, a `llama-server` process launcher, an OpenAI-compatible streaming chat client, and a broker that validates proposed tool calls before dispatch. The `LightLMChat.FamilyTree` DLL provides a read-only adapter contract and a family-summary tool using `find_people`, `get_person`, and `get_relatives`. The sample uses fictional data and scripted replies by default. If both runtime paths below are set, it starts the local server and exposes the family tool to the model. The real family API, model/runtime packaging, write approval UI, and real-model quality measurements are still to come. See [family tree integration](docs/FAMILY_TREE_INTEGRATION.md), [SRS](docs/SRS.md), and [implementation plan](docs/IMPLEMENTATION_PLAN.md).
+**Family tree integration prototype.** The solution contains host tool contracts, a WPF chat control, a sample WPF host, a `llama-server` process launcher, an OpenAI-compatible streaming chat client, and a broker that validates proposed tool calls before dispatch. The `LightLMChat.FamilyTree` DLL provides a read-only adapter contract and a family-summary tool using `find_people`, `get_person`, and `get_relatives`. The sample uses fictional data and scripted replies by default. If both runtime paths below are set, it starts the local server and exposes the family tool to the model. A [real Granite CPU smoke probe](docs/MODEL_PROBE.md) passed three representative questions; broader quality and minimum-hardware measurements are still needed. The real family API, offline distribution bundle, and write approval UI are not yet connected. See [family tree integration](docs/FAMILY_TREE_INTEGRATION.md), [SRS](docs/SRS.md), and [implementation plan](docs/IMPLEMENTATION_PLAN.md).
 
 On Windows with the .NET 10 SDK, run:
 
@@ -37,7 +37,15 @@ $env:LIGHTLMCHAT_MODEL_PATH = 'C:\path\to\granite-4.0-350m-Q8_0.gguf'
 dotnet run --project src/LightLMChat.SampleHost
 ```
 
-The launcher uses CPU inference, a 2048-token context, a random local API key, and an available `127.0.0.1` port. The model and engine are not downloaded at runtime. To run the model-free transport check:
+For development, `scripts/prepare-runtime.ps1` downloads the pinned official CPU engine and model into Git-ignored folders and verifies their SHA-256 hashes against [the manifest](docs/model-and-runtime-manifest.json). It prints the two environment variable commands to use:
+
+```powershell
+.\scripts\prepare-runtime.ps1
+# Paste the two environment-variable commands printed by the script.
+dotnet run --project tests/LightLMChat.ModelProbe
+```
+
+The launcher uses CPU inference, a 2048-token context, a random local API key, and an available `127.0.0.1` port. The application itself does not download model or engine files at runtime. To run the model-free transport check:
 
 ```powershell
 dotnet run --project tests/LightLMChat.RuntimeChecks

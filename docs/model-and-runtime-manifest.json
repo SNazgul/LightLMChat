@@ -1,0 +1,17 @@
+{
+  "engine": {
+    "project": "ggml-org/llama.cpp",
+    "version": "b12119",
+    "file": "llama-b12119-bin-win-cpu-x64.zip",
+    "url": "https://github.com/ggml-org/llama.cpp/releases/download/b12119/llama-b12119-bin-win-cpu-x64.zip",
+    "sha256": "37a6c6c9eae5b7baa2619cba513781fad15ca0f63f7d07362ec83a294cf96f86",
+    "license": "MIT"
+  },
+  "model": {
+    "project": "ibm-granite/granite-4.0-350m-GGUF",
+    "file": "granite-4.0-350m-Q8_0.gguf",
+    "url": "https://huggingface.co/ibm-granite/granite-4.0-350m-GGUF/resolve/main/granite-4.0-350m-Q8_0.gguf",
+    "sha256": "9595dafb4ed15aa02512c8ea26188744192a6f09530eae0a2747bd3ada96cd36",
+    "license": "Apache-2.0"
+  }
+}

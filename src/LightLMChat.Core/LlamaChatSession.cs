@@ -14,14 +14,19 @@ public sealed class LlamaChatSession : IChatSession
     private readonly LlamaServerRuntime _runtime;
     private readonly ToolCatalog? _catalog;
     private readonly ToolBroker? _broker;
+    private readonly bool _forceSingleTool;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly List<(string Role, string Content)> _history = [];
 
     public LlamaChatSession(
-        LlamaServerRuntime runtime, ToolCatalog? catalog = null, IToolApprovalService? approval = null)
+        LlamaServerRuntime runtime, ToolCatalog? catalog = null, IToolApprovalService? approval = null,
+        bool forceSingleTool = false)
     {
         _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         _catalog = catalog;
+        if (forceSingleTool && catalog?.Tools.Count != 1)
+            throw new ArgumentException("Forced tool selection needs exactly one registered tool.", nameof(catalog));
+        _forceSingleTool = forceSingleTool;
         if (catalog is not null) _broker = new ToolBroker(catalog, approval);
     }
 
@@ -54,6 +59,17 @@ public sealed class LlamaChatSession : IChatSession
                 }
 
                 yield return new ToolActivityEvent(proposal.Name, "Reading from the host application");
+                if (_catalog.TryGet(proposal.Name, out var selectedTool) &&
+                    selectedTool is IToolProposalNormalizer normalizer)
+                {
+                    var grounded = normalizer.NormalizeProposal(userMessage, proposal.Arguments);
+                    if (grounded is null)
+                    {
+                        yield return new TextDeltaEvent("I could not match the proposed name to your request. Please give the person's full name.");
+                        yield break;
+                    }
+                    proposal = proposal with { Arguments = grounded };
+                }
                 JsonObject? outcome = null;
                 try
                 {
@@ -153,12 +169,15 @@ public sealed class LlamaChatSession : IChatSession
                 parameters = JsonNode.Parse(tool.ParametersSchemaJson)
             }
         }).ToArray();
+        object toolChoice = _forceSingleTool
+            ? new { type = "function", function = new { name = _catalog.Tools.Single().Name } }
+            : "auto";
         using var request = CreateRequest(new
         {
             model = "lightlmchat",
             messages,
             tools,
-            tool_choice = "auto",
+            tool_choice = toolChoice,
             parallel_tool_calls = false,
             stream = false,
             max_tokens = 256,

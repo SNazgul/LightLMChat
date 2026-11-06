@@ -44,6 +44,17 @@ try
     Check(output.ToString() == "Hello local", "The session did not recover after cancellation.");
 
     var familyTool = new FamilySummaryTool(new SampleFamilyTreeApi());
+    var grounded = familyTool.NormalizeProposal("When was Mary born?",
+        new JsonObject { ["person_name"] = "Mary Example" });
+    Check(grounded?["person_name"]?.GetValue<string>() == "Mary",
+        "The tool accepted a name that was not fully present in the current request.");
+    grounded = familyTool.NormalizeProposal("When unt Marry Jozifer born?",
+        new JsonObject { ["person_name"] = "Jozifer" });
+    Check(grounded?["person_name"]?.GetValue<string>() == "Marry Jozifer",
+        "The tool did not recover the full name from the user's question.");
+    Check(familyTool.NormalizeProposal("When was Alice born?",
+        new JsonObject { ["person_name"] = "Mary Example" }) is null,
+        "An unrelated person name was accepted.");
     var catalog = new ToolCatalog([familyTool]);
     var broker = new ToolBroker(catalog);
     var result = await broker.ExecuteAsync(familyTool.Name,

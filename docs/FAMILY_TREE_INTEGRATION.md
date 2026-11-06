@@ -22,7 +22,7 @@ The other reported API operations (`tree_summary`, `get_ancestors`, `get_descend
 
 ## Current limits
 
-- The integration check uses a simulated llama-server response. It verifies the request schema, tool dispatch, argument validation, answer, and cancellation, but does not measure Granite's real tool-selection accuracy.
+- The automated integration check uses a simulated llama-server response. A separate [real-model smoke probe](MODEL_PROBE.md) checks three representative questions, but does not establish general accuracy.
 - The sample data is fictional. No real family tree API is connected.
 - Source citations from `list_sources` are not yet included in answers.
 - The broker requires approval for any tool classified as a write. No write operation is exposed in the family tree sample.

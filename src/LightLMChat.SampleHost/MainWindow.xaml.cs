@@ -36,7 +36,7 @@ public partial class MainWindow : Window
             _runtime = runtime;
             var familyApi = new SampleFamilyTreeApi();
             var catalog = new ToolCatalog([new FamilySummaryTool(familyApi)]);
-            Chat.Session = new LlamaChatSession(_runtime, catalog);
+            Chat.Session = new LlamaChatSession(_runtime, catalog, forceSingleTool: true);
             ModeLabel.Text = "Local model active — fictional family tree data. Try: When was Mary Example born and who are her children?";
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
