@@ -1,6 +1,6 @@
 # LightLMChat
 
-LightLMChat is a planned, embeddable **offline chat component for .NET desktop applications**. It combines a WPF chat control with a managed SDK that lets users request a small set of application actions in natural language. The host application supplies and authorizes those actions through a defined tool interface; the model never receives unrestricted access to application data or the operating system.
+LightLMChat is an early-stage, embeddable **offline chat component for .NET desktop applications**. It combines a WPF chat control with a managed SDK that will let users request a small set of application actions in natural language. The host application supplies and authorizes those actions through a defined tool interface; the model never receives unrestricted access to application data or the operating system.
 
 ## Design
 
@@ -20,7 +20,16 @@ The runtime is designed to work after installation with the network disconnected
 
 ## Project status
 
-**Planning stage.** The requirements and build sequence are in [docs/SRS.md](docs/SRS.md) and [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md). The next task is to define the first 3–5 host application operations and benchmark the selected model on a minimum-spec PC. Source projects and installer will follow that validation.
+**Phase 1: buildable solution skeleton.** The solution contains the host tool contracts, a WPF chat control, a tool catalog, and a sample WPF host. The sample uses scripted replies to demonstrate streaming and cancellation; model inference and application tool execution are not connected yet. The requirements and build sequence are in [docs/SRS.md](docs/SRS.md) and [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
+
+On Windows with the .NET 10 SDK, run:
+
+```powershell
+dotnet build LightLMChat.sln
+dotnet run --project src/LightLMChat.SampleHost
+```
+
+The next task is to define the first 3–5 host application operations and benchmark the selected model on a minimum-spec PC.
 
 ## Licensing
 

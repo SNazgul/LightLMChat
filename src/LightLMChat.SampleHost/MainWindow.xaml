@@ -1,0 +1,14 @@
+<Window x:Class="LightLMChat.SampleHost.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:chat="clr-namespace:LightLMChat.Wpf;assembly=LightLMChat.Wpf"
+        Title="LightLMChat Sample Host" Height="600" Width="780"
+        MinHeight="420" MinWidth="420">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Padding="12" Background="{DynamicResource {x:Static SystemColors.InfoBrushKey}}">
+            <TextBlock Text="UI prototype — scripted replies; local model integration follows in the next slice."
+                       TextWrapping="Wrap" />
+        </Border>
+        <chat:LightLmChatControl x:Name="Chat" />
+    </DockPanel>
+</Window>
