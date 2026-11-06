@@ -2,7 +2,7 @@
 
 Version: 0.1 (draft)  
 Date: 2026-11-06  
-Status: Family tree read and write workflows prototyped; per-request limits enforced; real API schema pending
+Status: Family tree read and write workflows prototyped; per-request limits and CPU fallback enforced; real API schema pending
 
 ## 1. Purpose and scope
 

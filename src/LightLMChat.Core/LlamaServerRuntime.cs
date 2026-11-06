@@ -14,16 +14,19 @@ public sealed class LlamaServerRuntime : IAsyncDisposable
     private bool _started;
     private bool _disposed;
 
-    private LlamaServerRuntime(Process process, HttpClient client, Uri baseAddress, string apiKey)
+    private LlamaServerRuntime(Process process, HttpClient client, Uri baseAddress, string apiKey, int gpuLayers)
     {
         _process = process;
         _client = client;
         BaseAddress = baseAddress;
         ApiKey = apiKey;
+        EffectiveGpuLayers = gpuLayers;
     }
 
     public Uri BaseAddress { get; }
     public int ProcessId { get; private set; }
+    /// <summary>GPU layers actually in use; 0 means CPU inference, possibly after a fallback.</summary>
+    public int EffectiveGpuLayers { get; }
     internal string ApiKey { get; }
     internal HttpClient Client => _client;
 
@@ -34,6 +37,25 @@ public sealed class LlamaServerRuntime : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
 
+        if (options.GpuLayers > 0)
+        {
+            try
+            {
+                return await StartCoreAsync(options, options.GpuLayers, cancellationToken);
+            }
+            catch (Exception ex) when ((ex is InvalidOperationException or TimeoutException) &&
+                                       !cancellationToken.IsCancellationRequested)
+            {
+                // GPU initialization failed; retry once on the CPU baseline (FR-09).
+                return await StartCoreAsync(options, 0, cancellationToken);
+            }
+        }
+        return await StartCoreAsync(options, options.GpuLayers, cancellationToken);
+    }
+
+    private static async Task<LlamaServerRuntime> StartCoreAsync(
+        LlamaServerOptions options, int gpuLayers, CancellationToken cancellationToken)
+    {
         var port = FindAvailableLoopbackPort();
         var baseAddress = new Uri($"http://127.0.0.1:{port}/");
         var apiKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
@@ -54,7 +76,7 @@ public sealed class LlamaServerRuntime : IAsyncDisposable
             "--host", "127.0.0.1",
             "--port", port.ToString(System.Globalization.CultureInfo.InvariantCulture),
             "--ctx-size", options.ContextSize.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            "--gpu-layers", options.GpuLayers.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            "--gpu-layers", gpuLayers.ToString(System.Globalization.CultureInfo.InvariantCulture),
             "--alias", "lightlmchat",
             "--jinja",
             "--no-webui"
@@ -67,7 +89,7 @@ public sealed class LlamaServerRuntime : IAsyncDisposable
             BaseAddress = baseAddress,
             Timeout = Timeout.InfiniteTimeSpan
         };
-        var runtime = new LlamaServerRuntime(process, client, baseAddress, apiKey);
+        var runtime = new LlamaServerRuntime(process, client, baseAddress, apiKey, gpuLayers);
         process.OutputDataReceived += static (_, _) => { };
         process.ErrorDataReceived += (_, e) => runtime.RecordError(e.Data);
 

@@ -45,7 +45,7 @@ For development, `scripts/prepare-runtime.ps1` downloads the pinned official CPU
 dotnet run --project tests/LightLMChat.ModelProbe
 ```
 
-The launcher uses CPU inference, a 2048-token context, a random local API key, and an available `127.0.0.1` port. The application itself does not download model or engine files at runtime. To run the model-free transport check:
+The launcher uses CPU inference, a 2048-token context, a random local API key, and an available `127.0.0.1` port; if GPU initialization fails it falls back to CPU. The application itself does not download model or engine files at runtime. To run the model-free transport check:
 
 ```powershell
 dotnet run --project tests/LightLMChat.RuntimeChecks

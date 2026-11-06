@@ -252,6 +252,41 @@ try
     Check(output.ToString() == "Mary Example was born 14 May 1908 in Bristol. Recorded children: Anna Example, Peter Example.",
         "Model tool-call flow did not return the family answer.");
 
+    // Runtime lifecycle fault paths (FR-09): load failures are reported and GPU init falls back to CPU.
+    var failExitModel = Path.Combine(Path.GetTempPath(), $"fail-exit-{Guid.NewGuid():N}.gguf");
+    var failStallModel = Path.Combine(Path.GetTempPath(), $"fail-stall-{Guid.NewGuid():N}.gguf");
+    File.WriteAllText(failExitModel, string.Empty);
+    File.WriteAllText(failStallModel, string.Empty);
+    try
+    {
+        var exitedDuringStartup = false;
+        try
+        {
+            await using var _ = await LlamaServerRuntime.StartAsync(
+                new LlamaServerOptions(executable, failExitModel, StartupTimeout: TimeSpan.FromSeconds(5)), CancellationToken.None);
+        }
+        catch (InvalidOperationException) { exitedDuringStartup = true; }
+        Check(exitedDuringStartup, "A server that exits during startup was not reported as a load failure.");
+
+        var startupTimedOut = false;
+        try
+        {
+            await using var _ = await LlamaServerRuntime.StartAsync(
+                new LlamaServerOptions(executable, failStallModel, StartupTimeout: TimeSpan.FromSeconds(2)), CancellationToken.None);
+        }
+        catch (TimeoutException) { startupTimedOut = true; }
+        Check(startupTimedOut, "A server that never becomes healthy did not hit the startup timeout.");
+
+        await using var fallback = await LlamaServerRuntime.StartAsync(
+            new LlamaServerOptions(executable, modelFile, GpuLayers: 2, StartupTimeout: TimeSpan.FromSeconds(10)), CancellationToken.None);
+        Check(fallback.EffectiveGpuLayers == 0, "GPU startup failure did not fall back to CPU.");
+    }
+    finally
+    {
+        File.Delete(failExitModel);
+        File.Delete(failStallModel);
+    }
+
     var childId = runtime.ProcessId;
     await runtime.DisposeAsync();
     try
@@ -261,7 +296,7 @@ try
     }
     catch (ArgumentException) { /* The process has exited and disappeared. */ }
 
-    Console.WriteLine("Runtime checks passed: streaming, cancellation, family API, tool validation, tool metadata, write approval, per-request limits, argument validation, result bounds, write-note flow, multi-tool loop, tool-call flow, shutdown.");
+    Console.WriteLine("Runtime checks passed: streaming, cancellation, family API, tool validation, tool metadata, write approval, per-request limits, argument validation, result bounds, write-note flow, multi-tool loop, tool-call flow, runtime faults (exit, stall, GPU fallback), shutdown.");
 }
 catch (Exception ex)
 {
@@ -282,6 +317,26 @@ static async Task RunFakeServerAsync(string[] arguments)
 {
     var port = arguments[Array.IndexOf(arguments, "--port") + 1];
     var expectedKey = Environment.GetEnvironmentVariable("LLAMA_API_KEY");
+    var model = arguments[Array.IndexOf(arguments, "--model") + 1];
+    var gpuLayers = int.Parse(arguments[Array.IndexOf(arguments, "--gpu-layers") + 1],
+        System.Globalization.CultureInfo.InvariantCulture);
+
+    if (model.Contains("fail-exit", StringComparison.Ordinal))
+    {
+        Environment.Exit(7);
+    }
+    if (model.Contains("fail-stall", StringComparison.Ordinal))
+    {
+        var stall = WebApplication.CreateSlimBuilder(arguments).Build();
+        stall.MapGet("/health", () => Results.StatusCode(503));
+        await stall.RunAsync();
+        return;
+    }
+    if (gpuLayers > 0)
+    {
+        Environment.Exit(9);
+    }
+
     var builder = WebApplication.CreateSlimBuilder(arguments);
     builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
     var app = builder.Build();
