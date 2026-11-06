@@ -17,7 +17,7 @@ The first release supports a small, predefined set of single-step operations. Op
 | UI and SDK | .NET 10, Windows x64; WPF control plus WPF-independent managed core DLL |
 | Inference | Bundled llama.cpp `llama-server`, launched as a child process on loopback |
 | Model | IBM Granite 4.0 350M Instruct, GGUF Q8_0, approximately 378 MB on disk |
-| License | Model: Apache 2.0; engine: MIT; distribute required notices |
+| License | LightLMChat source and documentation: MIT; model: Apache 2.0; engine: MIT; distribute required notices |
 | Minimum target | Windows x64, 8 GB RAM, modern 4-core CPU; integrated GPU optional |
 | Execution | CPU first; optional Vulkan backend only after measurement shows a benefit |
 | Connectivity | No cloud inference or runtime model download; operate with network disconnected |
