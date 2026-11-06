@@ -35,9 +35,11 @@ public partial class MainWindow : Window
             }
             _runtime = runtime;
             var familyApi = new SampleFamilyTreeApi();
-            var catalog = new ToolCatalog([new FamilySummaryTool(familyApi)]);
-            Chat.Session = new LlamaChatSession(_runtime, catalog, forceSingleTool: true);
-            ModeLabel.Text = "Local model active — fictional family tree data. Try: When was Mary Example born and who are her children?";
+            var notes = new SampleFamilyTreeNotes();
+            var approval = new ApprovalService(this);
+            var catalog = new ToolCatalog([new FamilySummaryTool(familyApi), new AddPersonNoteTool(familyApi, notes)]);
+            Chat.Session = new LlamaChatSession(_runtime, catalog, approval);
+            ModeLabel.Text = "Local model active — fictional family tree data. Try: When was Mary Example born and who are her children? Or: Add a note to Mary Example saying confirmed birth date.";
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {

@@ -44,5 +44,19 @@ public sealed class ToolCatalog
             !document.RootElement.TryGetProperty("type", out var type) ||
             type.GetString() != "object")
             throw new ArgumentException($"Tool {tool.Name} needs an object JSON input schema.", nameof(tool));
+
+        if (tool.OutputSchemaJson is { } outputSchema)
+        {
+            using var output = JsonDocument.Parse(outputSchema);
+            if (output.RootElement.ValueKind != JsonValueKind.Object ||
+                !output.RootElement.TryGetProperty("type", out _))
+                throw new ArgumentException($"Tool {tool.Name} needs an object JSON output schema.", nameof(tool));
+        }
+
+        foreach (var example in tool.Examples)
+        {
+            if (example is null || string.IsNullOrWhiteSpace(example.Request) || example.Arguments is null)
+                throw new ArgumentException($"Tool {tool.Name} has an invalid usage example.", nameof(tool));
+        }
     }
 }

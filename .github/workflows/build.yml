@@ -1,18 +1,31 @@
-name: Build
+name: Build and test
 
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   windows:
+    name: Build and run model-free checks (Windows)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+
       - name: Build solution
         run: dotnet build LightLMChat.sln --configuration Release
-      - name: Check local runtime protocol
+
+      # Model-free transport, protocol, catalog, broker, limits, and write-approval checks.
+      # The real Granite model probe (tests/LightLMChat.ModelProbe) is intentionally not run
+      # here because it needs the pinned engine and model binaries, which stay out of the repo.
+      - name: Run model-free runtime checks
         run: dotnet run --project tests/LightLMChat.RuntimeChecks --configuration Release --no-build

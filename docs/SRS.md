@@ -2,7 +2,7 @@
 
 Version: 0.1 (draft)  
 Date: 2026-11-06  
-Status: Family tree read workflow prototyped; real API schema pending
+Status: Family tree read and write workflows prototyped; per-request limits enforced; real API schema pending
 
 ## 1. Purpose and scope
 
@@ -66,7 +66,7 @@ public interface IApplicationTool
 }
 ```
 
-`IToolApprovalService` handles write approval; the host adapter handles per-user authorization and any WPF dispatcher access. The core never calls host business objects directly. Tool results are treated as data, not instructions to the model. The first family workflow and its API assumptions are documented in [FAMILY_TREE_INTEGRATION.md](FAMILY_TREE_INTEGRATION.md).
+A tool may optionally declare `OutputSchemaJson` and `Examples` (natural-language request → arguments pairs); the core forwards the examples to the model to sharpen operation selection and uses the output schema for bounded-result checks. `IToolApprovalService` handles write approval; the host adapter handles per-user authorization and any WPF dispatcher access. The core never calls host business objects directly. Tool results are treated as data, not instructions to the model. The first family workflow and its API assumptions are documented in [FAMILY_TREE_INTEGRATION.md](FAMILY_TREE_INTEGRATION.md).
 
 ## 6. Quality and operational requirements
 

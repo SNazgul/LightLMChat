@@ -1,0 +1,19 @@
+<Window x:Class="LightLMChat.SampleHost.ApprovalDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Approve application action" Width="480" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="False">
+    <StackPanel Margin="16">
+        <TextBlock Text="The assistant wants to run a write action:" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,8" />
+        <TextBlock x:Name="ToolNameLabel" FontWeight="SemiBold" Foreground="{DynamicResource {x:Static SystemColors.HighlightBrushKey}}" TextWrapping="Wrap" Margin="0,0,0,10" />
+        <TextBlock Text="Arguments" Opacity="0.7" Margin="0,0,0,4" />
+        <TextBox x:Name="ArgumentsBox" IsReadOnly="True" TextWrapping="Wrap" MinHeight="80" MaxHeight="180"
+                 VerticalScrollBarVisibility="Auto" FontFamily="Consolas"
+                 AutomationProperties.Name="Proposed action arguments" />
+        <TextBlock x:Name="WarningLabel" Text="This action can change application data and has not run yet." Foreground="DarkOrange" TextWrapping="Wrap" Margin="0,10,0,0" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button x:Name="ApproveButton" Content="Approve" MinWidth="92" IsDefault="True" Click="ApproveButton_Click" />
+            <Button x:Name="DenyButton" Content="Deny" MinWidth="92" Margin="8,0,0,0" IsCancel="True" Click="DenyButton_Click" />
+        </StackPanel>
+    </StackPanel>
+</Window>

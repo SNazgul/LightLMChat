@@ -14,6 +14,17 @@ public sealed class FamilySummaryTool(IFamilyTreeApi familyTree) : IApplicationT
         """;
     public ToolAccess Access => ToolAccess.ReadOnly;
 
+    public string? OutputSchemaJson => """
+        {"type":"object","properties":{"match":{"type":"string"},"display_text":{"type":"string"},"person":{"type":"object"},"children":{"type":"array"},"candidates":{"type":"array"}}}
+        """;
+
+    public IReadOnlyList<ToolUsageExample> Examples => new[]
+    {
+        new ToolUsageExample("When was Mary Example born and who are her children?",
+            new JsonObject { ["person_name"] = "Mary Example" }),
+        new ToolUsageExample("When was Mary born?", new JsonObject { ["person_name"] = "Mary" })
+    };
+
     public JsonObject? NormalizeProposal(string userMessage, JsonObject proposedArguments)
     {
         if (proposedArguments["person_name"] is not JsonValue value ||

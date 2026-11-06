@@ -102,6 +102,148 @@ try
         new JsonObject { ["value"] = "test" }, CancellationToken.None);
     Check(write.CallCount == 1, "Approved write did not run.");
 
+    var slowSession = new LlamaChatSession(runtime, limits: new ChatRequestLimits { MaxElapsed = TimeSpan.FromSeconds(1) });
+    var timedOut = false;
+    try
+    {
+        await foreach (var _ in slowSession.SendAsync("test timeout", CancellationToken.None)) { }
+    }
+    catch (TimeoutException) { timedOut = true; }
+    Check(timedOut, "Per-request elapsed time limit was not enforced.");
+
+    var invalidLimits = false;
+    try
+    {
+        _ = new LlamaChatSession(runtime, limits: new ChatRequestLimits { MaxToolCalls = 0 });
+    }
+    catch (ArgumentOutOfRangeException) { invalidLimits = true; }
+    Check(invalidLimits, "An out-of-range tool-call limit was accepted.");
+
+    var notes = new SampleFamilyTreeNotes();
+    var noteTool = new AddPersonNoteTool(new SampleFamilyTreeApi(), notes);
+    var noteCatalog = new ToolCatalog([noteTool]);
+    var noteDenied = await new ToolBroker(noteCatalog).ExecuteAsync(noteTool.Name,
+        new JsonObject { ["person_name"] = "Mary Example", ["note"] = "test note" }, CancellationToken.None);
+    Check(noteDenied["status"]?.GetValue<string>() == "denied" && notes.Count == 0,
+        "A write note ran without approval.");
+    await new ToolBroker(noteCatalog, new AllowApproval()).ExecuteAsync(noteTool.Name,
+        new JsonObject { ["person_name"] = "Mary Example", ["note"] = "test note" }, CancellationToken.None);
+    Check(notes.Count == 1, "An approved write note did not run.");
+    var ambiguousNote = await new ToolBroker(noteCatalog, new AllowApproval()).ExecuteAsync(noteTool.Name,
+        new JsonObject { ["person_name"] = "Mary", ["note"] = "test note" }, CancellationToken.None);
+    Check(ambiguousNote["result"]?["display_text"]?.GetValue<string>()!.Contains("several", StringComparison.Ordinal) == true,
+        "A write note must not guess an ambiguous person.");
+
+    var badMetadataRejected = false;
+    try
+    {
+        _ = new ToolCatalog([new BadOutputSchemaTool()]);
+    }
+    catch (ArgumentException) { badMetadataRejected = true; }
+    Check(badMetadataRejected, "A tool with an invalid output schema was accepted.");
+
+    // ToolCatalog construction validation.
+    var catalogRejected = false;
+    try { _ = new ToolCatalog([familyTool, new FamilySummaryTool(new SampleFamilyTreeApi())]); }
+    catch (ArgumentException) { catalogRejected = true; }
+    Check(catalogRejected, "Duplicate tool names were accepted.");
+
+    catalogRejected = false;
+    try { _ = new ToolCatalog([new BadNameTool()]); }
+    catch (ArgumentException) { catalogRejected = true; }
+    Check(catalogRejected, "An invalid tool name was accepted.");
+
+    catalogRejected = false;
+    try { _ = new ToolCatalog([new BadInputSchemaTool()]); }
+    catch (ArgumentException) { catalogRejected = true; }
+    Check(catalogRejected, "A tool with a non-object input schema was accepted.");
+
+    catalogRejected = false;
+    try { _ = new ToolCatalog([new BadExampleTool()]); }
+    catch (ArgumentException) { catalogRejected = true; }
+    Check(catalogRejected, "A tool with an invalid usage example was accepted.");
+
+    // ToolBroker argument-validation branches.
+    var argTool = new TestTool
+    {
+        Name = "validate_args",
+        Description = "Argument validation test tool.",
+        ParametersSchemaJson = """
+            {"type":"object","properties":{"text":{"type":"string","maxLength":3},"mode":{"type":"string","enum":["a","b"]},"count":{"type":"integer"}},"required":["text"],"additionalProperties":false}
+            """
+    };
+    var argBroker = new ToolBroker(new ToolCatalog([argTool]));
+
+    var argRejected = false;
+    try { await argBroker.ExecuteAsync("validate_args", new JsonObject { ["mode"] = "a" }, CancellationToken.None); }
+    catch (ArgumentException) { argRejected = true; }
+    Check(argRejected, "A missing required argument was accepted.");
+
+    argRejected = false;
+    try { await argBroker.ExecuteAsync("validate_args", new JsonObject { ["text"] = 123 }, CancellationToken.None); }
+    catch (ArgumentException) { argRejected = true; }
+    Check(argRejected, "A wrong-typed argument was accepted.");
+
+    argRejected = false;
+    try { await argBroker.ExecuteAsync("validate_args", new JsonObject { ["text"] = "ok", ["mode"] = "c" }, CancellationToken.None); }
+    catch (ArgumentException) { argRejected = true; }
+    Check(argRejected, "An out-of-enum argument was accepted.");
+
+    argRejected = false;
+    try { await argBroker.ExecuteAsync("validate_args", new JsonObject { ["text"] = "toolong" }, CancellationToken.None); }
+    catch (ArgumentException) { argRejected = true; }
+    Check(argRejected, "An over-length argument was accepted.");
+
+    var bigTool = new TestTool
+    {
+        Name = "big_result",
+        Description = "Returns an oversized result.",
+        ParametersSchemaJson = """{"type":"object","properties":{},"additionalProperties":false}""",
+        Handler = _ => new JsonObject { ["blob"] = new string('x', 9000) }
+    };
+    var oversized = false;
+    try { await new ToolBroker(new ToolCatalog([bigTool])).ExecuteAsync("big_result", new JsonObject(), CancellationToken.None); }
+    catch (InvalidOperationException) { oversized = true; }
+    Check(oversized, "An oversized tool result was not rejected.");
+
+    // Request-limit ranges are validated.
+    foreach (var bad in new[]
+    {
+        new ChatRequestLimits { MaxToolCalls = 9 },
+        new ChatRequestLimits { MaxGenerationTokens = 0 },
+        new ChatRequestLimits { MaxGenerationTokens = 4097 },
+        new ChatRequestLimits { MaxElapsed = TimeSpan.Zero }
+    })
+    {
+        var limitRejected = false;
+        try { _ = new LlamaChatSession(runtime, limits: bad); }
+        catch (ArgumentOutOfRangeException) { limitRejected = true; }
+        Check(limitRejected, "An out-of-range request limit was accepted.");
+    }
+
+    // MaxGenerationTokens is forwarded to the model request.
+    var tokenSession = new LlamaChatSession(runtime, limits: new ChatRequestLimits { MaxGenerationTokens = 321 });
+    output.Clear();
+    await foreach (var chatEvent in tokenSession.SendAsync("test max tokens", CancellationToken.None))
+        if (chatEvent is TextDeltaEvent delta) output.Append(delta.Text);
+    Check(output.ToString() == "321", "MaxGenerationTokens was not forwarded to the model.");
+
+    // Write-note edge case: unknown person must not mutate.
+    var zeroMatch = await new ToolBroker(noteCatalog, new AllowApproval()).ExecuteAsync(noteTool.Name,
+        new JsonObject { ["person_name"] = "Nobody Here", ["note"] = "n" }, CancellationToken.None);
+    Check(notes.Count == 1 && zeroMatch["result"]?["display_text"]?.GetValue<string>()!.Contains("could not find", StringComparison.Ordinal) == true,
+        "A write note for an unknown person mutated state or reported success.");
+
+    // Bounded multi-tool loop: the model keeps proposing calls, the session must stop at MaxToolCalls.
+    var chainTool = new ChainStepTool();
+    var chainSession = new LlamaChatSession(runtime, new ToolCatalog([chainTool]),
+        limits: new ChatRequestLimits { MaxToolCalls = 2 });
+    output.Clear();
+    await foreach (var chatEvent in chainSession.SendAsync("run chain", CancellationToken.None))
+        if (chatEvent is TextDeltaEvent delta) output.Append(delta.Text);
+    Check(chainTool.CallCount == 2 && output.ToString() == "done",
+        "The tool-call loop did not honor MaxToolCalls.");
+
     var familySession = new LlamaChatSession(runtime, catalog);
     output.Clear();
     await foreach (var chatEvent in familySession.SendAsync(
@@ -119,7 +261,12 @@ try
     }
     catch (ArgumentException) { /* The process has exited and disappeared. */ }
 
-    Console.WriteLine("Runtime checks passed: streaming, cancellation, family API, tool validation, write approval, tool-call flow, shutdown.");
+    Console.WriteLine("Runtime checks passed: streaming, cancellation, family API, tool validation, tool metadata, write approval, per-request limits, argument validation, result bounds, write-note flow, multi-tool loop, tool-call flow, shutdown.");
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"FAILED: {ex.Message}");
+    Environment.ExitCode = 1;
 }
 finally
 {
@@ -152,28 +299,56 @@ static async Task RunFakeServerAsync(string[] arguments)
         var last = messages[messages.GetArrayLength() - 1];
         if (payload.RootElement.TryGetProperty("tools", out var tools))
         {
-            if (tools[0].GetProperty("function").GetProperty("name").GetString() != "get_person_family_summary")
+            var function = tools[0].GetProperty("function");
+            var toolName = function.GetProperty("name").GetString();
+            if (toolName == "get_person_family_summary")
             {
-                context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                if (!function.GetProperty("description").GetString()!.Contains("Examples:", StringComparison.Ordinal))
+                {
+                    context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                    return;
+                }
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    choices = new[] { new { message = new
+                    {
+                        role = "assistant",
+                        content = (string?)null,
+                        tool_calls = new[] { new
+                        {
+                            id = "call_1", type = "function",
+                            function = new
+                            {
+                                name = "get_person_family_summary",
+                                arguments = "{\"person_name\":\"Mary Example\"}"
+                            }
+                        } }
+                    } } }
+                });
                 return;
             }
-            await context.Response.WriteAsJsonAsync(new
+            if (toolName == "chain_step")
             {
-                choices = new[] { new { message = new
+                await context.Response.WriteAsJsonAsync(new
                 {
-                    role = "assistant",
-                    content = (string?)null,
-                    tool_calls = new[] { new
+                    choices = new[] { new { message = new
                     {
-                        id = "call_1", type = "function",
-                        function = new
+                        role = "assistant",
+                        content = (string?)null,
+                        tool_calls = new[] { new
                         {
-                            name = "get_person_family_summary",
-                            arguments = "{\"person_name\":\"Mary Example\"}"
-                        }
-                    } }
-                } } }
-            });
+                            id = "chain_1", type = "function",
+                            function = new
+                            {
+                                name = "chain_step",
+                                arguments = "{\"step\":1}"
+                            }
+                        } }
+                    } } }
+                });
+                return;
+            }
+            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
             return;
         }
 
@@ -181,18 +356,27 @@ static async Task RunFakeServerAsync(string[] arguments)
         context.Response.ContentType = "text/event-stream";
         if (last.GetProperty("role").GetString() == "tool")
         {
-            if (!latest!.Contains("Anna Example", StringComparison.Ordinal))
+            if (latest!.Contains("Anna Example", StringComparison.Ordinal))
             {
-                context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-                return;
+                await WriteChunkAsync(context, "Born: 14 May 1908; children: ");
+                await WriteChunkAsync(context, "Anna Example, Peter Example");
             }
-            await WriteChunkAsync(context, "Born: 14 May 1908; children: ");
-            await WriteChunkAsync(context, "Anna Example, Peter Example");
+            else
+            {
+                await WriteChunkAsync(context, "done");
+            }
+            await context.Response.WriteAsync("data: [DONE]\n\n", context.RequestAborted);
+            return;
+        }
+        if (latest == "test max tokens")
+        {
+            var maxTokens = payload.RootElement.GetProperty("max_tokens").GetInt32();
+            await WriteChunkAsync(context, maxTokens.ToString(System.Globalization.CultureInfo.InvariantCulture));
             await context.Response.WriteAsync("data: [DONE]\n\n", context.RequestAborted);
             return;
         }
         await WriteChunkAsync(context, "Hello ");
-        if (latest == "test cancellation") await Task.Delay(5000, context.RequestAborted);
+        if (latest is "test cancellation" or "test timeout") await Task.Delay(5000, context.RequestAborted);
         await WriteChunkAsync(context, "local");
         await context.Response.WriteAsync("data: [DONE]\n\n", context.RequestAborted);
     });
@@ -229,4 +413,74 @@ sealed class AllowApproval : IToolApprovalService
 {
     public ValueTask<bool> ApproveAsync(ToolActionProposal proposal, CancellationToken cancellationToken)
         => ValueTask.FromResult(true);
+}
+
+sealed class BadOutputSchemaTool : IApplicationTool
+{
+    public string Name => "bad_output";
+    public string Description => "Test tool with a malformed output schema.";
+    public string ParametersSchemaJson => """{"type":"object","properties":{},"additionalProperties":false}""";
+    public ToolAccess Access => ToolAccess.ReadOnly;
+    public string? OutputSchemaJson => "42";
+    public ValueTask<JsonNode?> ExecuteAsync(JsonObject arguments, CancellationToken cancellationToken)
+        => ValueTask.FromResult<JsonNode?>(null);
+}
+
+sealed class BadNameTool : IApplicationTool
+{
+    public string Name => "BadName";
+    public string Description => "Tool with an invalid name.";
+    public string ParametersSchemaJson => """{"type":"object","properties":{},"additionalProperties":false}""";
+    public ToolAccess Access => ToolAccess.ReadOnly;
+    public ValueTask<JsonNode?> ExecuteAsync(JsonObject arguments, CancellationToken cancellationToken)
+        => ValueTask.FromResult<JsonNode?>(null);
+}
+
+sealed class BadInputSchemaTool : IApplicationTool
+{
+    public string Name => "bad_input";
+    public string Description => "Tool with a non-object input schema.";
+    public string ParametersSchemaJson => """{"type":"string"}""";
+    public ToolAccess Access => ToolAccess.ReadOnly;
+    public ValueTask<JsonNode?> ExecuteAsync(JsonObject arguments, CancellationToken cancellationToken)
+        => ValueTask.FromResult<JsonNode?>(null);
+}
+
+sealed class BadExampleTool : IApplicationTool
+{
+    public string Name => "bad_example";
+    public string Description => "Tool with an invalid usage example.";
+    public string ParametersSchemaJson => """{"type":"object","properties":{},"additionalProperties":false}""";
+    public ToolAccess Access => ToolAccess.ReadOnly;
+    public IReadOnlyList<ToolUsageExample> Examples => new[] { new ToolUsageExample("", new JsonObject()) };
+    public ValueTask<JsonNode?> ExecuteAsync(JsonObject arguments, CancellationToken cancellationToken)
+        => ValueTask.FromResult<JsonNode?>(null);
+}
+
+sealed class TestTool : IApplicationTool
+{
+    public required string Name { get; init; }
+    public required string Description { get; init; }
+    public required string ParametersSchemaJson { get; init; }
+    public ToolAccess Access { get; init; } = ToolAccess.ReadOnly;
+    public string? OutputSchemaJson { get; init; }
+    public IReadOnlyList<ToolUsageExample> Examples { get; init; } = Array.Empty<ToolUsageExample>();
+    public Func<JsonObject, JsonNode?>? Handler { get; init; }
+
+    public ValueTask<JsonNode?> ExecuteAsync(JsonObject arguments, CancellationToken cancellationToken)
+        => ValueTask.FromResult<JsonNode?>(Handler?.Invoke(arguments));
+}
+
+sealed class ChainStepTool : IApplicationTool
+{
+    public int CallCount { get; private set; }
+    public string Name => "chain_step";
+    public string Description => "Chain test operation that returns data without display_text.";
+    public string ParametersSchemaJson => """{"type":"object","properties":{"step":{"type":"integer"}},"required":["step"],"additionalProperties":false}""";
+    public ToolAccess Access => ToolAccess.ReadOnly;
+    public ValueTask<JsonNode?> ExecuteAsync(JsonObject arguments, CancellationToken cancellationToken)
+    {
+        CallCount++;
+        return ValueTask.FromResult<JsonNode?>(new JsonObject { ["step"] = arguments["step"]!.GetValue<int>() });
+    }
 }
