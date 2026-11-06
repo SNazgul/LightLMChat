@@ -287,6 +287,29 @@ try
         File.Delete(failStallModel);
     }
 
+    // Bounded conversation context (FR-04): history is capped so the model sees a bounded prompt.
+    var contextSession = new LlamaChatSession(runtime);
+    for (var i = 0; i < 8; i++)
+    {
+        await foreach (var _ in contextSession.SendAsync($"turn {i}", CancellationToken.None)) { }
+    }
+    output.Clear();
+    await foreach (var chatEvent in contextSession.SendAsync("report message count", CancellationToken.None))
+        if (chatEvent is TextDeltaEvent delta) output.Append(delta.Text);
+    Check(int.Parse(output.ToString()) <= 14, "The model received an unbounded conversation context.");
+
+    // Cancellation during tool execution (FR-08): a host tool honors the request token.
+    var slowTool = new SlowTool();
+    var slowBroker = new ToolBroker(new ToolCatalog([slowTool]));
+    using var slowCancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+    var toolCanceled = false;
+    try
+    {
+        await slowBroker.ExecuteAsync(slowTool.Name, new JsonObject(), slowCancellation.Token);
+    }
+    catch (OperationCanceledException) { toolCanceled = true; }
+    Check(toolCanceled && !slowTool.Completed, "Cancellation during tool execution was not honored.");
+
     var childId = runtime.ProcessId;
     await runtime.DisposeAsync();
     try
@@ -296,7 +319,7 @@ try
     }
     catch (ArgumentException) { /* The process has exited and disappeared. */ }
 
-    Console.WriteLine("Runtime checks passed: streaming, cancellation, family API, tool validation, tool metadata, write approval, per-request limits, argument validation, result bounds, write-note flow, multi-tool loop, tool-call flow, runtime faults (exit, stall, GPU fallback), shutdown.");
+    Console.WriteLine("Runtime checks passed: streaming, cancellation, family API, tool validation, tool metadata, write approval, per-request limits, argument validation, result bounds, write-note flow, multi-tool loop, bounded context, tool cancellation, tool-call flow, runtime faults (exit, stall, GPU fallback), shutdown.");
 }
 catch (Exception ex)
 {
@@ -430,6 +453,12 @@ static async Task RunFakeServerAsync(string[] arguments)
             await context.Response.WriteAsync("data: [DONE]\n\n", context.RequestAborted);
             return;
         }
+        if (latest == "report message count")
+        {
+            await WriteChunkAsync(context, messages.GetArrayLength().ToString(System.Globalization.CultureInfo.InvariantCulture));
+            await context.Response.WriteAsync("data: [DONE]\n\n", context.RequestAborted);
+            return;
+        }
         await WriteChunkAsync(context, "Hello ");
         if (latest is "test cancellation" or "test timeout") await Task.Delay(5000, context.RequestAborted);
         await WriteChunkAsync(context, "local");
@@ -537,5 +566,20 @@ sealed class ChainStepTool : IApplicationTool
     {
         CallCount++;
         return ValueTask.FromResult<JsonNode?>(new JsonObject { ["step"] = arguments["step"]!.GetValue<int>() });
+    }
+}
+
+sealed class SlowTool : IApplicationTool
+{
+    public bool Completed { get; private set; }
+    public string Name => "slow_tool";
+    public string Description => "Blocks until the request token is canceled.";
+    public string ParametersSchemaJson => """{"type":"object","properties":{},"additionalProperties":false}""";
+    public ToolAccess Access => ToolAccess.ReadOnly;
+    public async ValueTask<JsonNode?> ExecuteAsync(JsonObject arguments, CancellationToken cancellationToken)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
+        Completed = true;
+        return new JsonObject { ["done"] = true };
     }
 }
