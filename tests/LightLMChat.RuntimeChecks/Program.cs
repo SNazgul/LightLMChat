@@ -298,6 +298,15 @@ try
         if (chatEvent is TextDeltaEvent delta) output.Append(delta.Text);
     Check(int.Parse(output.ToString()) <= 14, "The model received an unbounded conversation context.");
 
+    // Reset starts a new conversation by dropping history.
+    var resetSession = new LlamaChatSession(runtime);
+    await foreach (var _ in resetSession.SendAsync("seed history", CancellationToken.None)) { }
+    resetSession.Reset();
+    output.Clear();
+    await foreach (var chatEvent in resetSession.SendAsync("report message count", CancellationToken.None))
+        if (chatEvent is TextDeltaEvent delta) output.Append(delta.Text);
+    Check(int.Parse(output.ToString()) == 2, "Reset did not clear conversation history.");
+
     // Cancellation during tool execution (FR-08): a host tool honors the request token.
     var slowTool = new SlowTool();
     var slowBroker = new ToolBroker(new ToolCatalog([slowTool]));
@@ -319,7 +328,7 @@ try
     }
     catch (ArgumentException) { /* The process has exited and disappeared. */ }
 
-    Console.WriteLine("Runtime checks passed: streaming, cancellation, family API, tool validation, tool metadata, write approval, per-request limits, argument validation, result bounds, write-note flow, multi-tool loop, bounded context, tool cancellation, tool-call flow, runtime faults (exit, stall, GPU fallback), shutdown.");
+    Console.WriteLine("Runtime checks passed: streaming, cancellation, family API, tool validation, tool metadata, write approval, per-request limits, argument validation, result bounds, write-note flow, multi-tool loop, bounded context, session reset, tool cancellation, tool-call flow, runtime faults (exit, stall, GPU fallback), shutdown.");
 }
 catch (Exception ex)
 {

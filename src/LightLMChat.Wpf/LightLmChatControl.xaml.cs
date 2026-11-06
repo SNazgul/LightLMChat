@@ -37,6 +37,15 @@ public partial class LightLmChatControl : UserControl
 
     private void CancelButton_Click(object sender, RoutedEventArgs e) => _requestCancellation?.Cancel();
 
+    private void ClearButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_requestCancellation is not null) return;
+        Messages.Clear();
+        Session?.Reset();
+        StatusLabel.Text = "Ready";
+        Composer.Focus();
+    }
+
     private async Task SendCurrentAsync()
     {
         if (_requestCancellation is not null) return;
@@ -101,6 +110,7 @@ public partial class LightLmChatControl : UserControl
         SendButton.IsEnabled = !busy;
         CancelButton.IsEnabled = busy;
         Composer.IsEnabled = !busy;
+        ClearButton.IsEnabled = !busy;
         if (busy) StatusLabel.Text = "Working…";
     }
 }

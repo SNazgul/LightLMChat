@@ -4,7 +4,7 @@ LightLMChat is an early-stage, embeddable **offline chat component for .NET desk
 
 ## Design
 
-- **UI:** reusable .NET 10 WPF chat control with streamed responses, cancellation, and activity display. Write approval UI is planned.
+- **UI:** reusable .NET 10 WPF chat control with streamed responses, cancellation, activity display, and a clear-chat action.
 - **SDK:** WPF-independent .NET DLLs for chat sessions, tool contracts, catalog validation, and runtime management.
 - **Inference:** a managed launcher for `llama-server`, bound to localhost for offline operation. Engine binaries will be packaged later.
 - **Model:** IBM Granite 4.0 350M Instruct, GGUF Q8_0. The model file is about **378 MB**; installed size and runtime RAM use are higher.

@@ -36,6 +36,10 @@ public sealed class LlamaChatSession : IChatSession
     public IAsyncEnumerable<ChatEvent> SendAsync(string userMessage, CancellationToken cancellationToken)
         => WrapTimeout(SendCoreAsync(userMessage, cancellationToken), cancellationToken, _limits);
 
+    /// <summary>Drops conversation history; the next request starts a fresh conversation.</summary>
+    /// <remarks>Call only when no request is in flight, as the WPF control does.</remarks>
+    public void Reset() => _history.Clear();
+
     // The token is passed as an explicit argument (not via WithCancellation) so that
     // callers using either pattern cancel correctly; the enumerator token is therefore
     // intentionally redundant here.
