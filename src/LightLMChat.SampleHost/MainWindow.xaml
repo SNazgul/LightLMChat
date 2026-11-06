@@ -6,7 +6,7 @@
         MinHeight="420" MinWidth="420">
     <DockPanel>
         <Border DockPanel.Dock="Top" Padding="12" Background="{DynamicResource {x:Static SystemColors.InfoBrushKey}}">
-            <TextBlock Text="UI prototype — scripted replies; local model integration follows in the next slice."
+            <TextBlock x:Name="ModeLabel" Text="UI prototype — scripted replies. Set runtime paths to use a local model."
                        TextWrapping="Wrap" />
         </Border>
         <chat:LightLmChatControl x:Name="Chat" />

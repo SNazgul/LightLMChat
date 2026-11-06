@@ -11,7 +11,7 @@ Build a narrow vertical slice first: one read tool, one write tool, a single cha
 | Phase | Work | Exit condition |
 | --- | --- | --- |
 | 0. Tool contract and evaluation set | Obtain the host's first 3–5 operations. Define schemas, examples, permission rules, and a held-out set of requests. Measure Granite 350M Q8_0 on the reference PC for tool choice, argument extraction, latency, and RAM. | A written compatibility and quality report; go/no-go for the 350M baseline. |
-| 1. Solution skeleton | Create `LocalAi.sln`, `LocalAi.Abstractions`, `LocalAi.Core`, `LocalAi.Wpf`, `LocalAi.SampleHost`, and test projects; set .NET 10 and CI build. | Clean build on Windows x64; sample host loads control. |
+| 1. Solution skeleton | Create `LightLMChat.sln`, `LightLMChat.Abstractions`, `LightLMChat.Core`, `LightLMChat.Wpf`, `LightLMChat.SampleHost`, and runtime checks; set .NET 10 and CI build. | Clean build on Windows x64; sample host loads control. **Done.** |
 | 2. Engine lifecycle | Pin llama.cpp version and model hash. Launch local server on an available loopback port with a session key; wait for health, stream completions, cancel, stop, and recover from failure. | Offline sample prompt succeeds; process and logs clean up on exit. |
 | 3. Tool broker | Register host tools; provide schemas to model; parse and validate calls; enforce authorization, limits, approval, and bounded results. | Sample read and write operations complete; invalid/denied calls cause no mutation. |
 | 4. WPF control | Implement message list, compose box, streaming text, tool activity, explicit write approval, cancel, errors, keyboard access, and host theming. | Usable end-to-end flow in sample host. |
@@ -21,19 +21,18 @@ Build a narrow vertical slice first: one read tool, one write tool, a single cha
 ## Proposed repository layout
 
 ```text
-AI-Light-Local-LM/
+LightLMChat/
   docs/
     SRS.md
     IMPLEMENTATION_PLAN.md
     model-and-runtime-manifest.json
   src/
-    LocalAi.Abstractions/
-    LocalAi.Core/
-    LocalAi.Wpf/
-    LocalAi.SampleHost/
+    LightLMChat.Abstractions/
+    LightLMChat.Core/
+    LightLMChat.Wpf/
+    LightLMChat.SampleHost/
   tests/
-    LocalAi.Core.Tests/
-    LocalAi.Integration.Tests/
+    LightLMChat.RuntimeChecks/
   packaging/
   LICENSES/
 ```
@@ -42,9 +41,9 @@ Do not commit the 378 MB model to ordinary Git history. Record its source revisi
 
 ## Initial technical choices
 
-- Use `HttpClient` against the bundled `llama-server` chat API. Keep the transport behind `IInferenceClient`.
+- Use `HttpClient` against the bundled `llama-server` chat API. The current `LlamaChatSession` implements text streaming; tool calls will extend this path in Phase 3.
 - Restrict the first model prompt to a small tool catalog and short conversation context. Prefer one tool call per turn; ask for clarification when required arguments are missing.
-- Treat assistant output as a proposal. Only `ILocalAiTool` implementations can access host data.
+- Treat assistant output as a proposal. Only `IApplicationTool` implementations can access host data.
 - Keep the engine process outside the WPF UI process. Stream and cancellation use async APIs; no blocking work on the dispatcher.
 - Run a CPU reference build first. GPU support is an optimization informed by measured throughput, initialization time, and memory use.
 

@@ -4,9 +4,9 @@ LightLMChat is an early-stage, embeddable **offline chat component for .NET desk
 
 ## Design
 
-- **UI:** reusable .NET 10 WPF chat control with streamed responses, cancellation, action display, and approval prompts.
-- **SDK:** WPF-independent .NET DLL for chat sessions, inference, tool validation, and runtime management.
-- **Inference:** bundled llama.cpp process, bound to localhost for offline operation.
+- **UI:** reusable .NET 10 WPF chat control with streamed responses, cancellation, and activity display. Write approval UI is planned.
+- **SDK:** WPF-independent .NET DLLs for chat sessions, tool contracts, catalog validation, and runtime management.
+- **Inference:** a managed launcher for `llama-server`, bound to localhost for offline operation. Engine binaries will be packaged later.
 - **Model:** IBM Granite 4.0 350M Instruct, GGUF Q8_0. The model file is about **378 MB**; installed size and runtime RAM use are higher.
 - **Host integration:** applications register a small catalog of typed read and write tools. The SDK checks model-proposed calls against their schemas. The host controls permissions, executes tools, and approves writes.
 
@@ -20,7 +20,7 @@ The runtime is designed to work after installation with the network disconnected
 
 ## Project status
 
-**Phase 1: buildable solution skeleton.** The solution contains the host tool contracts, a WPF chat control, a tool catalog, and a sample WPF host. The sample uses scripted replies to demonstrate streaming and cancellation; model inference and application tool execution are not connected yet. The requirements and build sequence are in [docs/SRS.md](docs/SRS.md) and [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
+**Phase 2 in progress: local inference transport.** The solution contains host tool contracts, a WPF chat control, a tool catalog, a sample WPF host, a `llama-server` process launcher, and an OpenAI-compatible streaming chat client. The sample uses scripted replies by default. If both runtime paths below are set, it starts the local server and uses model replies. Application tool execution, write approval, model/runtime packaging, and real-model quality measurements are still to come. The requirements and build sequence are in [docs/SRS.md](docs/SRS.md) and [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
 On Windows with the .NET 10 SDK, run:
 
@@ -29,7 +29,21 @@ dotnet build LightLMChat.sln
 dotnet run --project src/LightLMChat.SampleHost
 ```
 
-The next task is to define the first 3–5 host application operations and benchmark the selected model on a minimum-spec PC.
+To try a locally installed `llama-server` and Granite GGUF model in the sample:
+
+```powershell
+$env:LIGHTLMCHAT_SERVER_PATH = 'C:\path\to\llama-server.exe'
+$env:LIGHTLMCHAT_MODEL_PATH = 'C:\path\to\granite-4.0-350m-Q8_0.gguf'
+dotnet run --project src/LightLMChat.SampleHost
+```
+
+The launcher uses CPU inference, a 2048-token context, a random local API key, and an available `127.0.0.1` port. The model and engine are not downloaded at runtime. To run the model-free transport check:
+
+```powershell
+dotnet run --project tests/LightLMChat.RuntimeChecks
+```
+
+The next domain task is to define the first 3–5 host application operations and benchmark the selected model on a minimum-spec PC.
 
 ## Licensing
 

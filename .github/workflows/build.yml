@@ -14,3 +14,5 @@ jobs:
           dotnet-version: 10.0.x
       - name: Build solution
         run: dotnet build LightLMChat.sln --configuration Release
+      - name: Check local runtime protocol
+        run: dotnet run --project tests/LightLMChat.RuntimeChecks --configuration Release --no-build

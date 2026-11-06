@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LightLMChat.Abstractions\LightLMChat.Abstractions.csproj" />
+    <ProjectReference Include="..\LightLMChat.Core\LightLMChat.Core.csproj" />
     <ProjectReference Include="..\LightLMChat.Wpf\LightLMChat.Wpf.csproj" />
   </ItemGroup>
 
