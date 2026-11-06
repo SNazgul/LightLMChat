@@ -24,5 +24,5 @@ The runtime is designed to work after installation with the network disconnected
 
 ## Licensing
 
-The selected [IBM Granite model](https://huggingface.co/ibm-granite/granite-4.0-350m) is published under Apache 2.0, and [llama.cpp](https://github.com/ggml-org/llama.cpp) under MIT. The project's own source license will be set before code is published for reuse. Distribution packages will include the required third-party notices.
+LightLMChat source code and documentation are licensed under [MIT](LICENSE). The selected [IBM Granite model](https://huggingface.co/ibm-granite/granite-4.0-350m) remains under Apache 2.0, and [llama.cpp](https://github.com/ggml-org/llama.cpp) remains under MIT. Model weights and engine binaries are not included in this repository; future distribution packages will include their required license and attribution notices.
 
