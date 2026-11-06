@@ -20,7 +20,7 @@ The runtime is designed to work after installation with the network disconnected
 
 ## Project status
 
-**Phase 2 in progress: local inference transport.** The solution contains host tool contracts, a WPF chat control, a tool catalog, a sample WPF host, a `llama-server` process launcher, and an OpenAI-compatible streaming chat client. The sample uses scripted replies by default. If both runtime paths below are set, it starts the local server and uses model replies. Application tool execution, write approval, model/runtime packaging, and real-model quality measurements are still to come. The requirements and build sequence are in [docs/SRS.md](docs/SRS.md) and [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
+**Family tree integration prototype.** The solution contains host tool contracts, a WPF chat control, a sample WPF host, a `llama-server` process launcher, an OpenAI-compatible streaming chat client, and a broker that validates proposed tool calls before dispatch. The `LightLMChat.FamilyTree` DLL provides a read-only adapter contract and a family-summary tool using `find_people`, `get_person`, and `get_relatives`. The sample uses fictional data and scripted replies by default. If both runtime paths below are set, it starts the local server and exposes the family tool to the model. The real family API, model/runtime packaging, write approval UI, and real-model quality measurements are still to come. See [family tree integration](docs/FAMILY_TREE_INTEGRATION.md), [SRS](docs/SRS.md), and [implementation plan](docs/IMPLEMENTATION_PLAN.md).
 
 On Windows with the .NET 10 SDK, run:
 
@@ -43,7 +43,7 @@ The launcher uses CPU inference, a 2048-token context, a random local API key, a
 dotnet run --project tests/LightLMChat.RuntimeChecks
 ```
 
-The next domain task is to define the first 3–5 host application operations and benchmark the selected model on a minimum-spec PC.
+With a local model configured, try: “When was Mary Example born and who are her children?” `Mary Example` is a fictional sample record. The next tasks are to connect the real family tree API and measure Granite's tool-selection accuracy on a minimum-spec PC.
 
 ## Licensing
 

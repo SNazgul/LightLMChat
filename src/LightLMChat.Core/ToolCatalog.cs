@@ -36,6 +36,9 @@ public sealed class ToolCatalog
         if (string.IsNullOrWhiteSpace(tool.Description))
             throw new ArgumentException($"Tool {tool.Name} needs a description.", nameof(tool));
 
+        if (!Enum.IsDefined(tool.Access))
+            throw new ArgumentException($"Tool {tool.Name} has an invalid access classification.", nameof(tool));
+
         using var document = JsonDocument.Parse(tool.ParametersSchemaJson);
         if (document.RootElement.ValueKind != JsonValueKind.Object ||
             !document.RootElement.TryGetProperty("type", out var type) ||

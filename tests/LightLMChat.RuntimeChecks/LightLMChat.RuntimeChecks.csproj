@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\LightLMChat.Core\LightLMChat.Core.csproj" />
+    <ProjectReference Include="..\..\src\LightLMChat.FamilyTree\LightLMChat.FamilyTree.csproj" />
   </ItemGroup>
 </Project>

@@ -2,7 +2,7 @@
 
 Version: 0.1 (draft)  
 Date: 2026-11-06  
-Status: Architecture agreed; host application operations pending
+Status: Family tree read workflow prototyped; real API schema pending
 
 ## 1. Purpose and scope
 
@@ -26,11 +26,12 @@ The 378 MB figure is only the model file size. Installed size and runtime memory
 
 ## 3. System components
 
-1. `LocalAi.Abstractions`: public contracts for host tools, conversation events, approvals, and configuration.
-2. `LocalAi.Core`: session orchestration, prompt and tool catalog construction, inference transport, tool-call validation, process lifecycle, and diagnostics.
-3. `LocalAi.Wpf`: embeddable chat `UserControl` and view model; no direct access to host data.
-4. `LocalAi.Runtime`: pinned llama.cpp binaries, a pinned model artifact, checksums, and license notices. These are packaged separately from source control as appropriate.
-5. `LocalAi.SampleHost`: a small WPF sample application implementing representative read and write tools.
+1. `LightLMChat.Abstractions`: public contracts for host tools, conversation events, and approvals.
+2. `LightLMChat.Core`: chat session, tool catalog and broker, inference transport, and process lifecycle.
+3. `LightLMChat.FamilyTree`: the first domain adapter contract and read-only family summary tool.
+4. `LightLMChat.Wpf`: embeddable chat `UserControl`; no direct access to host data.
+5. `LightLMChat.SampleHost`: a WPF sample with fictional family tree data.
+6. Planned runtime bundle: pinned llama.cpp binaries, a pinned model artifact, checksums, and license notices.
 
 The public managed API must not expose llama.cpp-specific types. Host applications should be able to supply another inference provider in a future version without changing their tool implementations.
 
@@ -52,20 +53,20 @@ The public managed API must not expose llama.cpp-specific types. Host applicatio
 
 ## 5. Host integration contract
 
-The initial contract is conceptually:
+The host tool contract is:
 
 ```csharp
-public interface ILocalAiTool
+public interface IApplicationTool
 {
     string Name { get; }
     string Description { get; }
-    JsonElement InputSchema { get; }
-    bool IsReadOnly { get; }
-    Task<JsonElement> ExecuteAsync(JsonElement arguments, CancellationToken cancellationToken);
+    string ParametersSchemaJson { get; }
+    ToolAccess Access { get; }
+    ValueTask<JsonNode?> ExecuteAsync(JsonObject arguments, CancellationToken cancellationToken);
 }
 ```
 
-The final interface will additionally provide a host approval callback, per-user authorization context, and result/error types. The core never calls host business objects directly. A host adapter handles any WPF dispatcher access. Tool results are treated as untrusted data, not as instructions to the model.
+`IToolApprovalService` handles write approval; the host adapter handles per-user authorization and any WPF dispatcher access. The core never calls host business objects directly. Tool results are treated as data, not instructions to the model. The first family workflow and its API assumptions are documented in [FAMILY_TREE_INTEGRATION.md](FAMILY_TREE_INTEGRATION.md).
 
 ## 6. Quality and operational requirements
 

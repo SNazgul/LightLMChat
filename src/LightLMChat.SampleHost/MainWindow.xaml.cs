@@ -1,5 +1,6 @@
 using System.Windows;
 using LightLMChat.Core;
+using LightLMChat.FamilyTree;
 
 namespace LightLMChat.SampleHost;
 
@@ -33,8 +34,10 @@ public partial class MainWindow : Window
                 return;
             }
             _runtime = runtime;
-            Chat.Session = new LlamaChatSession(_runtime);
-            ModeLabel.Text = "Local model active — CPU inference";
+            var familyApi = new SampleFamilyTreeApi();
+            var catalog = new ToolCatalog([new FamilySummaryTool(familyApi)]);
+            Chat.Session = new LlamaChatSession(_runtime, catalog);
+            ModeLabel.Text = "Local model active — fictional family tree data. Try: When was Mary Example born and who are her children?";
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
