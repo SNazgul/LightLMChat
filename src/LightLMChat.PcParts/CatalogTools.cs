@@ -42,12 +42,12 @@ public sealed class SearchPartsTool(PcPartsCatalog catalog) : IApplicationTool
             return ValueTask.FromResult<JsonNode?>(new JsonObject
             {
                 ["match"] = "one",
-                ["display_text"] = $"{p.Subtype} ({p.Type}) by {p.Company} — {p.Characteristics}. {p.Description}",
+                ["display_text"] = $"{p.Subtype} ({p.Type}) by {p.Company} — ${p.PriceUsd}. {p.Characteristics}. {p.Description}",
                 ["parts"] = ToJson(parts)
             });
         }
 
-        var list = string.Join("\n", parts.Select(p => $"- {p.Subtype} ({p.Type}) — {p.Company}"));
+        var list = string.Join("\n", parts.Select(p => $"- {p.Subtype} ({p.Type}) — {p.Company} (${p.PriceUsd})"));
         return ValueTask.FromResult<JsonNode?>(new JsonObject
         {
             ["match"] = "many",
@@ -63,7 +63,8 @@ public sealed class SearchPartsTool(PcPartsCatalog catalog) : IApplicationTool
         ["subtype"] = p.Subtype,
         ["company"] = p.Company,
         ["characteristics"] = p.Characteristics,
-        ["description"] = p.Description
+        ["description"] = p.Description,
+        ["price_usd"] = p.PriceUsd
     }).ToArray());
 }
 
@@ -90,6 +91,51 @@ public sealed class ListPartTypesTool(PcPartsCatalog catalog) : IApplicationTool
         {
             ["display_text"] = "Available part types: " + string.Join(", ", types) + ".",
             ["types"] = new JsonArray(types.Select(t => (JsonNode?)JsonValue.Create(t)!).ToArray())
+        });
+    }
+}
+
+/// <summary>Recommends the cheapest complete PC build: one lowest-priced part per category.</summary>
+public sealed class RecommendBuildTool(PcPartsCatalog catalog) : IApplicationTool
+{
+    private static readonly string[] BuildTypes =
+    [
+        "CPU", "Motherboard", "Memory", "Hard drive", "Video card", "Display",
+        "Keyboard", "Mouse", "Case", "Power supply", "Floppy drive", "I/O controller"
+    ];
+
+    public string Name => "recommend_build";
+    public string Description => "Recommend the cheapest complete PC build by picking the single lowest-priced part in each required category (CPU, motherboard, memory, hard drive, video card, display, keyboard, mouse, case, power supply, floppy drive, and I/O controller). Use for requests like 'assemble the cheapest PC' or 'what is the cheapest build'. This picks by price only and does not check compatibility between parts.";
+    public string ParametersSchemaJson => """{"type":"object","properties":{},"additionalProperties":false}""";
+    public ToolAccess Access => ToolAccess.ReadOnly;
+
+    public string? OutputSchemaJson => """
+        {"type":"object","properties":{"display_text":{"type":"string"},"total_price_usd":{"type":"integer"},"parts":{"type":"array"}}}
+        """;
+
+    public IReadOnlyList<ToolUsageExample> Examples => new[]
+    {
+        new ToolUsageExample("Assemble the cheapest PC", new JsonObject())
+    };
+
+    public ValueTask<JsonNode?> ExecuteAsync(JsonObject arguments, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var picks = BuildTypes.Select(catalog.Cheapest).OfType<PcPart>().ToArray();
+        var total = picks.Sum(p => p.PriceUsd);
+        var lines = picks.Select(p => $"- {p.Type}: {p.Subtype} ({p.Company}) — ${p.PriceUsd}");
+        return ValueTask.FromResult<JsonNode?>(new JsonObject
+        {
+            ["display_text"] = "Cheapest complete build (one part per category):\n" + string.Join("\n", lines) + $"\n\nTotal: ${total}",
+            ["total_price_usd"] = total,
+            ["parts"] = new JsonArray(picks.Select(p => (JsonNode?)new JsonObject
+            {
+                ["id"] = p.Id,
+                ["type"] = p.Type,
+                ["subtype"] = p.Subtype,
+                ["company"] = p.Company,
+                ["price_usd"] = p.PriceUsd
+            }).ToArray())
         });
     }
 }

@@ -49,22 +49,43 @@ public partial class MainWindow : Window
         DetailDescription.Text = part.Description;
     }
 
+    private static string? FindInTree(string startDir, string subdir, string pattern, bool recursive = false)
+    {
+        for (var dir = new DirectoryInfo(startDir); dir is not null; dir = dir.Parent)
+        {
+            var candidate = Path.Combine(dir.FullName, subdir);
+            if (!Directory.Exists(candidate)) continue;
+            var option = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+            var match = Directory.EnumerateFiles(candidate, pattern, option).FirstOrDefault();
+            if (match is not null) return match;
+        }
+        return null;
+    }
+
     private static (string? Server, string? Model) ResolveRuntime()
     {
-        // Environment variables take precedence; a bundled runtime/ folder is the fallback.
+        // Precedence: environment variables, then a bundled runtime/ folder next to the app,
+        // then the scripts/prepare-runtime.ps1 dev layout (models/ + artifacts/) found by walking up.
         var server = Environment.GetEnvironmentVariable("LIGHTLMCHAT_SERVER_PATH");
         var model = Environment.GetEnvironmentVariable("LIGHTLMCHAT_MODEL_PATH");
 
-        var runtimeDir = Path.Combine(AppContext.BaseDirectory, "runtime");
-        if (Directory.Exists(runtimeDir))
+        var baseDir = AppContext.BaseDirectory;
+        var cwd = Directory.GetCurrentDirectory();
+
+        if (string.IsNullOrWhiteSpace(server))
         {
-            server = string.IsNullOrWhiteSpace(server)
-                ? Directory.EnumerateFiles(runtimeDir, "llama-server.exe", SearchOption.TopDirectoryOnly).FirstOrDefault()
-                : server;
-            model = string.IsNullOrWhiteSpace(model)
-                ? Directory.EnumerateFiles(runtimeDir, "*.gguf", SearchOption.TopDirectoryOnly).FirstOrDefault()
-                : model;
+            server = FindInTree(baseDir, "runtime", "llama-server.exe")
+                     ?? FindInTree(cwd, "artifacts", "llama-server.exe", recursive: true)
+                     ?? FindInTree(baseDir, "artifacts", "llama-server.exe", recursive: true);
         }
+
+        if (string.IsNullOrWhiteSpace(model))
+        {
+            model = FindInTree(baseDir, "runtime", "*.gguf")
+                    ?? FindInTree(cwd, "models", "*.gguf")
+                    ?? FindInTree(baseDir, "models", "*.gguf");
+        }
+
         return (server, model);
     }
 
@@ -74,7 +95,7 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(server) || string.IsNullOrWhiteSpace(model))
         {
             ShowModelNotice(
-                "Local model not configured. Place llama-server.exe and the Granite GGUF model in a runtime/ folder next to this app, or set LIGHTLMCHAT_SERVER_PATH and LIGHTLMCHAT_MODEL_PATH (see scripts/prepare-runtime.ps1). The catalog is still browsable.",
+                "Local model not found. Run scripts/prepare-runtime.ps1 to download the engine and model, or set LIGHTLMCHAT_SERVER_PATH and LIGHTLMCHAT_MODEL_PATH. The catalog is still browsable.",
                 inChat: true);
             return;
         }
@@ -91,14 +112,18 @@ public partial class MainWindow : Window
             }
             _runtime = runtime;
 
-            var tools = new ToolCatalog([new SearchPartsTool(_catalog), new ListPartTypesTool(_catalog)]);
+            var tools = new ToolCatalog([
+                new SearchPartsTool(_catalog),
+                new ListPartTypesTool(_catalog),
+                new RecommendBuildTool(_catalog)
+            ]);
             Chat.Session = new LlamaChatSession(_runtime, tools);
             ShowModelNotice("Local model active — ask about IBM PC parts (286–486), e.g. \"What Intel 486 CPUs do you have?\"");
         }
         catch (FileNotFoundException)
         {
             ShowModelNotice(
-                "Local model files not found. Place them in a runtime/ folder next to this app, or set LIGHTLMCHAT_SERVER_PATH and LIGHTLMCHAT_MODEL_PATH.",
+                "Local model files not found. Run scripts/prepare-runtime.ps1, or set LIGHTLMCHAT_SERVER_PATH and LIGHTLMCHAT_MODEL_PATH.",
                 inChat: true);
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)

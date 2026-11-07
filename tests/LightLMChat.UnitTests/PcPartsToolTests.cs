@@ -46,3 +46,27 @@ public class ListPartTypesToolTests
         Assert.Contains("Motherboard", text);
     }
 }
+
+public class RecommendBuildToolTests
+{
+    [Fact]
+    public async Task Picks_one_cheapest_part_per_category()
+    {
+        var catalog = new PcPartsCatalog();
+        var result = await new ToolBroker(new ToolCatalog([new RecommendBuildTool(catalog)]))
+            .ExecuteAsync("recommend_build", new JsonObject(), CancellationToken.None);
+
+        var text = result["result"]?["display_text"]?.GetValue<string>() ?? "";
+        var parts = result["result"]?["parts"]?.AsArray();
+        var total = result["result"]?["total_price_usd"]?.GetValue<int>() ?? 0;
+
+        Assert.Contains("Cheapest complete build", text);
+        Assert.Contains("Total: $", text);
+        Assert.Equal(12, parts?.Count);
+        Assert.True(total > 0);
+
+        // Exactly one CPU (not several), because the tool picks one part per category.
+        var cpuCount = text.Split('\n').Count(line => line.StartsWith("- CPU:", StringComparison.Ordinal));
+        Assert.Equal(1, cpuCount);
+    }
+}
