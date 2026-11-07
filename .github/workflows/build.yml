@@ -24,7 +24,10 @@ jobs:
       - name: Build solution
         run: dotnet build LightLMChat.sln --configuration Release
 
-      # Model-free transport, protocol, catalog, broker, limits, and write-approval checks.
+      - name: Run unit tests
+        run: dotnet test --configuration Release --no-build
+
+      # Model-free transport, protocol, and lifecycle integration checks (spawn a fake server).
       # The real Granite model probe (tests/LightLMChat.ModelProbe) is intentionally not run
       # here because it needs the pinned engine and model binaries, which stay out of the repo.
       - name: Run model-free runtime checks
