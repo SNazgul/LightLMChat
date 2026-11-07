@@ -30,7 +30,18 @@
                                 Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
                             <StackPanel>
                                 <TextBlock Text="{Binding Role}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,4" />
-                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                                <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                                         IsTabStop="False" TextWrapping="Wrap" BorderThickness="0" Background="Transparent" Padding="0"
+                                         ContextMenuService.ContextMenuOpening="MessageTextBox_ContextMenuOpening">
+                                    <TextBox.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="Copy" Tag="copy-selection" Click="CopySelectionMenuItem_Click" />
+                                            <MenuItem Header="Copy message" Click="CopyMessageMenuItem_Click" />
+                                            <Separator />
+                                            <MenuItem Header="Select all" Click="SelectAllMenuItem_Click" />
+                                        </ContextMenu>
+                                    </TextBox.ContextMenu>
+                                </TextBox>
                             </StackPanel>
                         </Border>
                     </DataTemplate>

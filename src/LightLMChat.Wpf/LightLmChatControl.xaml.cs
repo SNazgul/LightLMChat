@@ -65,6 +65,46 @@ public partial class LightLmChatControl : UserControl
         Composer.Focus();
     }
 
+    private void CopySelectionMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Parent: ContextMenu { PlacementTarget: TextBox box } } &&
+            box.SelectedText.Length > 0)
+            CopyToClipboard(box.SelectedText);
+    }
+
+    private void CopyMessageMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { DataContext: ChatMessage message })
+            CopyToClipboard(message.Text);
+    }
+
+    private void SelectAllMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Parent: ContextMenu { PlacementTarget: TextBox box } })
+        {
+            box.Focus();
+            box.SelectAll();
+        }
+    }
+
+    private void MessageTextBox_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is not TextBox box || box.ContextMenu is not ContextMenu menu)
+            return;
+
+        foreach (var item in menu.Items.OfType<MenuItem>())
+        {
+            if (item.Tag as string == "copy-selection")
+                item.Visibility = box.SelectedText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
+
+    private static void CopyToClipboard(string text)
+    {
+        try { Clipboard.SetText(text); }
+        catch (System.Runtime.InteropServices.ExternalException) { /* The clipboard is busy; ignore. */ }
+    }
+
     private static void OnNoticeTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var control = (LightLmChatControl)d;
