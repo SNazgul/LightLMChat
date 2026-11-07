@@ -30,6 +30,15 @@ public partial class LightLmChatControl : UserControl
 
     private async void Composer_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Escape)
+        {
+            if (_requestCancellation is not null)
+            {
+                e.Handled = true;
+                _requestCancellation.Cancel();
+            }
+            return;
+        }
         if (e.Key != Key.Enter || Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) return;
         e.Handled = true;
         await SendCurrentAsync();
