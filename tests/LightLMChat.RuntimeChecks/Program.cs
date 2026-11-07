@@ -252,6 +252,15 @@ try
     Check(output.ToString() == "Mary Example was born 14 May 1908 in Bristol. Recorded children: Anna Example, Peter Example.",
         "Model tool-call flow did not return the family answer.");
 
+    // FR-04: the model receives exactly the session's tools (no missing or extra tools).
+    var twoToolSession = new LlamaChatSession(runtime, new ToolCatalog([familyTool, noteTool]));
+    output.Clear();
+    await foreach (var chatEvent in twoToolSession.SendAsync(
+        "When was Mary Example born?", CancellationToken.None))
+        if (chatEvent is TextDeltaEvent delta) output.Append(delta.Text);
+    Check(output.ToString().Contains("14 May 1908", StringComparison.Ordinal),
+        "The model did not receive the exact session tool set.");
+
     // Runtime lifecycle fault paths (FR-09): load failures are reported and GPU init falls back to CPU.
     var failExitModel = Path.Combine(Path.GetTempPath(), $"fail-exit-{Guid.NewGuid():N}.gguf");
     var failStallModel = Path.Combine(Path.GetTempPath(), $"fail-stall-{Guid.NewGuid():N}.gguf");
@@ -328,7 +337,7 @@ try
     }
     catch (ArgumentException) { /* The process has exited and disappeared. */ }
 
-    Console.WriteLine("Runtime checks passed: streaming, cancellation, family API, tool validation, tool metadata, write approval, per-request limits, argument validation, result bounds, write-note flow, multi-tool loop, bounded context, session reset, tool cancellation, tool-call flow, runtime faults (exit, stall, GPU fallback), shutdown.");
+    Console.WriteLine("Runtime checks passed: streaming, cancellation, family API, tool validation, tool metadata, write approval, per-request limits, argument validation, result bounds, write-note flow, multi-tool loop, bounded context, session reset, session tool set, tool cancellation, tool-call flow, runtime faults (exit, stall, GPU fallback), shutdown.");
 }
 catch (Exception ex)
 {
@@ -386,11 +395,18 @@ static async Task RunFakeServerAsync(string[] arguments)
         var last = messages[messages.GetArrayLength() - 1];
         if (payload.RootElement.TryGetProperty("tools", out var tools))
         {
-            var function = tools[0].GetProperty("function");
-            var toolName = function.GetProperty("name").GetString();
-            if (toolName == "get_person_family_summary")
+            var functions = tools.EnumerateArray()
+                .Select(t => t.GetProperty("function"))
+                .ToArray();
+            var toolNames = functions.Select(f => f.GetProperty("name").GetString()).ToArray();
+
+            // The exact tool set must match the session catalog: no missing or extra tools.
+            if (toolNames is ["get_person_family_summary"] or
+                ["get_person_family_summary", "add_person_note"] or
+                ["add_person_note", "get_person_family_summary"])
             {
-                if (!function.GetProperty("description").GetString()!.Contains("Examples:", StringComparison.Ordinal))
+                var family = functions.First(f => f.GetProperty("name").GetString() == "get_person_family_summary");
+                if (!family.GetProperty("description").GetString()!.Contains("Examples:", StringComparison.Ordinal))
                 {
                     context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
                     return;
@@ -414,7 +430,7 @@ static async Task RunFakeServerAsync(string[] arguments)
                 });
                 return;
             }
-            if (toolName == "chain_step")
+            if (toolNames is ["chain_step"])
             {
                 await context.Response.WriteAsJsonAsync(new
                 {
