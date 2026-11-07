@@ -4,7 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using LightLMChat.Abstractions;
 using LightLMChat.Core;
-using LightLMChat.FamilyTree;
+using LightLMChat.PcParts;
 
 if (args.Contains("--model"))
 {
@@ -43,8 +43,8 @@ try
         if (chatEvent is TextDeltaEvent delta) output.Append(delta.Text);
     Check(output.ToString() == "Hello local", "The session did not recover after cancellation.");
 
-    var familyTool = new FamilySummaryTool(new SampleFamilyTreeApi());
-    var catalog = new ToolCatalog([familyTool]);
+    var searchTool = new SearchPartsTool(new PcPartsCatalog());
+    var catalog = new ToolCatalog([searchTool]);
 
     var slowSession = new LlamaChatSession(runtime, limits: new ChatRequestLimits { MaxElapsed = TimeSpan.FromSeconds(1) });
     var timedOut = false;
@@ -63,8 +63,7 @@ try
     catch (ArgumentOutOfRangeException) { invalidLimits = true; }
     Check(invalidLimits, "An out-of-range tool-call limit was accepted.");
 
-    var notes = new SampleFamilyTreeNotes();
-    var noteTool = new AddPersonNoteTool(new SampleFamilyTreeApi(), notes);
+    var listTypesTool = new ListPartTypesTool(new PcPartsCatalog());
 
     // Request-limit ranges are validated.
     foreach (var bad in new[]
@@ -98,21 +97,21 @@ try
     Check(chainTool.CallCount == 2 && output.ToString() == "done",
         "The tool-call loop did not honor MaxToolCalls.");
 
-    var familySession = new LlamaChatSession(runtime, catalog);
+    var searchSession = new LlamaChatSession(runtime, catalog);
     output.Clear();
-    await foreach (var chatEvent in familySession.SendAsync(
-        "When was Mary Example born and who are her children?", CancellationToken.None))
+    await foreach (var chatEvent in searchSession.SendAsync(
+        "Tell me about the Intel 80486DX4", CancellationToken.None))
         if (chatEvent is TextDeltaEvent delta) output.Append(delta.Text);
-    Check(output.ToString() == "Mary Example was born 14 May 1908 in Bristol. Recorded children: Anna Example, Peter Example.",
-        "Model tool-call flow did not return the family answer.");
+    Check(output.ToString().Contains("80486DX4", StringComparison.Ordinal),
+        "Model tool-call flow did not return the catalog answer.");
 
     // FR-04: the model receives exactly the session's tools (no missing or extra tools).
-    var twoToolSession = new LlamaChatSession(runtime, new ToolCatalog([familyTool, noteTool]));
+    var twoToolSession = new LlamaChatSession(runtime, new ToolCatalog([searchTool, listTypesTool]));
     output.Clear();
     await foreach (var chatEvent in twoToolSession.SendAsync(
-        "When was Mary Example born?", CancellationToken.None))
+        "Tell me about the Intel 80486DX4", CancellationToken.None))
         if (chatEvent is TextDeltaEvent delta) output.Append(delta.Text);
-    Check(output.ToString().Contains("14 May 1908", StringComparison.Ordinal),
+    Check(output.ToString().Contains("80486DX4", StringComparison.Ordinal),
         "The model did not receive the exact session tool set.");
 
     // Runtime lifecycle fault paths (FR-09): load failures are reported and GPU init falls back to CPU.
@@ -191,7 +190,7 @@ try
     }
     catch (ArgumentException) { /* The process has exited and disappeared. */ }
 
-    Console.WriteLine("Runtime checks passed: streaming, cancellation, family API, tool validation, tool metadata, write approval, per-request limits, argument validation, result bounds, write-note flow, multi-tool loop, bounded context, session reset, session tool set, tool cancellation, tool-call flow, runtime faults (exit, stall, GPU fallback), shutdown.");
+    Console.WriteLine("Runtime checks passed: streaming, cancellation, recovery, timeout, limits, max tokens, multi-tool loop, catalog tool-call flow, session tool set, bounded context, session reset, tool cancellation, runtime faults (exit, stall, GPU fallback), shutdown.");
 }
 catch (Exception ex)
 {
@@ -255,12 +254,12 @@ static async Task RunFakeServerAsync(string[] arguments)
             var toolNames = functions.Select(f => f.GetProperty("name").GetString()).ToArray();
 
             // The exact tool set must match the session catalog: no missing or extra tools.
-            if (toolNames is ["get_person_family_summary"] or
-                ["get_person_family_summary", "add_person_note"] or
-                ["add_person_note", "get_person_family_summary"])
+            if (toolNames is ["search_parts"] or
+                ["search_parts", "list_part_types"] or
+                ["list_part_types", "search_parts"])
             {
-                var family = functions.First(f => f.GetProperty("name").GetString() == "get_person_family_summary");
-                if (!family.GetProperty("description").GetString()!.Contains("Examples:", StringComparison.Ordinal))
+                var search = functions.First(f => f.GetProperty("name").GetString() == "search_parts");
+                if (!search.GetProperty("description").GetString()!.Contains("Examples:", StringComparison.Ordinal))
                 {
                     context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
                     return;
@@ -276,8 +275,8 @@ static async Task RunFakeServerAsync(string[] arguments)
                             id = "call_1", type = "function",
                             function = new
                             {
-                                name = "get_person_family_summary",
-                                arguments = "{\"person_name\":\"Mary Example\"}"
+                                name = "search_parts",
+                                arguments = "{\"query\":\"80486DX4\"}"
                             }
                         } }
                     } } }
@@ -313,15 +312,7 @@ static async Task RunFakeServerAsync(string[] arguments)
         context.Response.ContentType = "text/event-stream";
         if (last.GetProperty("role").GetString() == "tool")
         {
-            if (latest!.Contains("Anna Example", StringComparison.Ordinal))
-            {
-                await WriteChunkAsync(context, "Born: 14 May 1908; children: ");
-                await WriteChunkAsync(context, "Anna Example, Peter Example");
-            }
-            else
-            {
-                await WriteChunkAsync(context, "done");
-            }
+            await WriteChunkAsync(context, "done");
             await context.Response.WriteAsync("data: [DONE]\n\n", context.RequestAborted);
             return;
         }

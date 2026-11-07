@@ -1,5 +1,5 @@
 using LightLMChat.Core;
-using LightLMChat.FamilyTree;
+using LightLMChat.PcParts;
 
 namespace LightLMChat.UnitTests;
 
@@ -8,8 +8,8 @@ public class ToolCatalogTests
     [Fact]
     public void Rejects_duplicate_names() =>
         Assert.Throws<ArgumentException>(() => new ToolCatalog([
-            new FamilySummaryTool(new SampleFamilyTreeApi()),
-            new FamilySummaryTool(new SampleFamilyTreeApi())
+            new SearchPartsTool(new PcPartsCatalog()),
+            new SearchPartsTool(new PcPartsCatalog())
         ]));
 
     [Fact]

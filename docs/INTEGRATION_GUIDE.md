@@ -9,7 +9,7 @@ The model never gets direct access to application data or the operating system. 
 *propose* calls to the operations the host registered, and every proposal is validated against the
 declared schema before it runs. Writes additionally require explicit host approval.
 
-The family tree sample is one concrete instance of this pattern; the contract itself is generic.
+The PC-parts catalog example is one concrete instance of this pattern; the contract itself is generic.
 
 ## 1. Declare an operation
 

@@ -2,7 +2,7 @@
 
 Version: 0.1 (draft)  
 Date: 2026-11-06  
-Status: Family tree read and write workflows prototyped; per-request limits and CPU fallback enforced; real API schema pending
+Status: PC-parts catalog read workflow prototyped; per-request limits and CPU fallback enforced; real-model validation and packaging pending
 
 ## 1. Purpose and scope
 
@@ -28,9 +28,9 @@ The 378 MB figure is only the model file size. Installed size and runtime memory
 
 1. `LightLMChat.Abstractions`: public contracts for host tools, conversation events, and approvals.
 2. `LightLMChat.Core`: chat session, tool catalog and broker, inference transport, and process lifecycle.
-3. `LightLMChat.FamilyTree`: the first domain adapter contract and read-only family summary tool.
+3. `LightLMChat.PcParts`: the PC-parts domain adapter (catalog plus search/list tools) used by the example and tests.
 4. `LightLMChat.Wpf`: embeddable chat `UserControl`; no direct access to host data.
-5. `LightLMChat.SampleHost`: a WPF sample with fictional family tree data.
+5. `LightLMChat.ExampleApp`: a complete example WPF host — a read-only IBM PC parts catalog (286–486) demonstrating the host tool contract.
 6. Planned runtime bundle: pinned llama.cpp binaries, a pinned model artifact, checksums, and license notices.
 
 The public managed API must not expose llama.cpp-specific types. Host applications should be able to supply another inference provider in a future version without changing their tool implementations.
@@ -66,7 +66,7 @@ public interface IApplicationTool
 }
 ```
 
-A tool may optionally declare `OutputSchemaJson` and `Examples` (natural-language request → arguments pairs); the core forwards the examples to the model to sharpen operation selection and uses the output schema for bounded-result checks. `IToolApprovalService` handles write approval; the host adapter handles per-user authorization and any WPF dispatcher access. The core never calls host business objects directly. Tool results are treated as data, not instructions to the model. The first family workflow and its API assumptions are documented in [FAMILY_TREE_INTEGRATION.md](FAMILY_TREE_INTEGRATION.md). A generic worked integration example is in [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md).
+A tool may optionally declare `OutputSchemaJson` and `Examples` (natural-language request → arguments pairs); the core forwards the examples to the model to sharpen operation selection and uses the output schema for bounded-result checks. `IToolApprovalService` handles write approval; the host adapter handles per-user authorization and any WPF dispatcher access. The core never calls host business objects directly. Tool results are treated as data, not instructions to the model. A generic worked integration example is in [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md).
 
 ## 6. Quality and operational requirements
 

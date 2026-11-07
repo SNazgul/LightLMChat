@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\LightLMChat.Abstractions\LightLMChat.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\LightLMChat.Core\LightLMChat.Core.csproj" />
+    <ProjectReference Include="..\..\src\LightLMChat.PcParts\LightLMChat.PcParts.csproj" />
+    <ProjectReference Include="..\..\src\LightLMChat.Wpf\LightLMChat.Wpf.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+</Project>

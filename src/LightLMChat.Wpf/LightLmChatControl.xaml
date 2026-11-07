@@ -40,6 +40,12 @@
 
         <Border Grid.Row="2" Padding="12" BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" BorderThickness="0,1,0,0">
             <StackPanel>
+                <Border x:Name="NoticeBanner" Visibility="Collapsed"
+                        Background="{DynamicResource {x:Static SystemColors.InfoBrushKey}}"
+                        BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
+                        BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,8">
+                    <TextBlock x:Name="NoticeLabel" TextWrapping="Wrap" />
+                </Border>
                 <TextBlock x:Name="StatusLabel" Text="Ready" Opacity="0.7" Margin="2,0,0,8"
                            AutomationProperties.Name="Status" AutomationProperties.LiveSetting="Polite" />
                 <Grid>

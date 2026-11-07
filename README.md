@@ -20,21 +20,21 @@ The runtime is designed to work after installation with the network disconnected
 
 ## Project status
 
-**Family tree integration prototype.** The solution contains host tool contracts, a WPF chat control, a sample WPF host, a `llama-server` process launcher, an OpenAI-compatible streaming chat client, and a broker that validates proposed tool calls before dispatch. The `LightLMChat.FamilyTree` DLL provides a read-only adapter contract, a family-summary tool using `find_people`, `get_person`, and `get_relatives`, and a write `add_person_note` tool. The core enforces per-request limits on sequential tool calls, generation length, and elapsed time. The sample uses fictional data and scripted replies by default. If both runtime paths below are set, it starts the local server and exposes the read and write tools to the model, with a modal approve/deny dialog for writes. A [real Granite CPU smoke probe](docs/MODEL_PROBE.md) passed three representative questions; broader quality and minimum-hardware measurements are still needed. The real family API and offline distribution bundle are not yet connected. See the [integration guide](docs/INTEGRATION_GUIDE.md), [family tree integration](docs/FAMILY_TREE_INTEGRATION.md), [SRS](docs/SRS.md), and [implementation plan](docs/IMPLEMENTATION_PLAN.md).
+**Embeddable local chat prototype.** The kit contains the host tool contract, a WPF chat control, a `llama-server` process launcher, an OpenAI-compatible streaming chat client, and a broker that validates proposed tool calls before dispatch, with per-request limits on tool calls, generation length, and elapsed time. The [`LightLMChat.ExampleApp`](samples/LightLMChat.ExampleApp) sample registers its own tools for a read-only IBM PC parts catalog (286–486) and embeds the chat control. Broader quality and minimum-hardware measurements are still needed, and the offline distribution bundle is not yet packaged. See the [integration guide](docs/INTEGRATION_GUIDE.md), [SRS](docs/SRS.md), and [implementation plan](docs/IMPLEMENTATION_PLAN.md).
 
-On Windows with the .NET 10 SDK, run:
+On Windows with the .NET 10 SDK, run the PC-parts catalog example:
 
 ```powershell
 dotnet build LightLMChat.sln
-dotnet run --project src/LightLMChat.SampleHost
+dotnet run --project samples/LightLMChat.ExampleApp
 ```
 
-To try a locally installed `llama-server` and Granite GGUF model in the sample:
+It opens a read-only browser of IBM PC parts (286–486 era: CPUs, motherboards, memory, drives, displays, mice, keyboards, and more) with the AI chat control beside it. The catalog is browsable without a model. To enable AI chat, set the two runtime paths below — both the app and the chat control show a clear status message when the local model is not found:
 
 ```powershell
 $env:LIGHTLMCHAT_SERVER_PATH = 'C:\path\to\llama-server.exe'
 $env:LIGHTLMCHAT_MODEL_PATH = 'C:\path\to\granite-4.0-350m-Q8_0.gguf'
-dotnet run --project src/LightLMChat.SampleHost
+dotnet run --project samples/LightLMChat.ExampleApp
 ```
 
 For development, `scripts/prepare-runtime.ps1` downloads the pinned official CPU engine and model into Git-ignored folders and verifies their SHA-256 hashes against [the manifest](docs/model-and-runtime-manifest.json). It prints the two environment variable commands to use:
@@ -51,7 +51,7 @@ The launcher uses CPU inference, a 2048-token context, a random local API key, a
 dotnet run --project tests/LightLMChat.RuntimeChecks
 ```
 
-With a local model configured, try: “When was Mary Example born and who are her children?” `Mary Example` is a fictional sample record. The next tasks are to connect the real family tree API and measure Granite's tool-selection accuracy on a minimum-spec PC.
+With a local model configured, try asking the chat: “What Intel 486 CPUs do you have?” or “Show me VGA monitors.” The next tasks are real-model tool-selection accuracy measurement on a minimum-spec PC and packaging the offline runtime bundle.
 
 ## Licensing
 

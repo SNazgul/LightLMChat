@@ -11,9 +11,9 @@ Build a narrow vertical slice first: one read tool, one write tool, a single cha
 | Phase | Work | Exit condition |
 | --- | --- | --- |
 | 0. Tool contract and evaluation set | Obtain the host's first 3–5 operations. Define schemas, examples, permission rules, and a held-out set of requests. Measure Granite 350M Q8_0 on the reference PC for tool choice, argument extraction, latency, and RAM. | A written compatibility and quality report; go/no-go for the 350M baseline. |
-| 1. Solution skeleton | Create `LightLMChat.sln`, `LightLMChat.Abstractions`, `LightLMChat.Core`, `LightLMChat.Wpf`, `LightLMChat.SampleHost`, and runtime checks; set .NET 10 and CI build. | Clean build on Windows x64; sample host loads control. **Done.** |
-| 2. Engine lifecycle | Pin llama.cpp version and model hash. Launch local server on an available loopback port with a session key; wait for health, stream completions, cancel, stop, and recover from failure. | CPU local prompt and three family questions verified. Cleanup, cancellation, startup failure, startup timeout, and GPU→CPU fallback pass protocol checks. Hardware-specific measurement remains. |
-| 3. Tool broker | Register host tools; provide schemas to model; parse and validate calls; enforce authorization, limits, approval, and bounded results. | Family tree read and write prototypes, broker checks, and a sample approve/deny write flow are in place. A real API adapter and real-model validation remain. |
+| 1. Solution skeleton | Create `LightLMChat.sln`, `LightLMChat.Abstractions`, `LightLMChat.Core`, `LightLMChat.Wpf`, `LightLMChat.ExampleApp`, and runtime checks; set .NET 10 and CI build. | Clean build on Windows x64; sample host loads control. **Done.** |
+| 2. Engine lifecycle | Pin llama.cpp version and model hash. Launch local server on an available loopback port with a session key; wait for health, stream completions, cancel, stop, and recover from failure. | CPU local prompt and three catalog questions verified. Cleanup, cancellation, startup failure, startup timeout, and GPU→CPU fallback pass protocol checks. Hardware-specific measurement remains. |
+| 3. Tool broker | Register host tools; provide schemas to model; parse and validate calls; enforce authorization, limits, approval, and bounded results. | PC-parts read prototype, broker checks, and write-approval semantics are in place. Real-model validation remains. |
 | 4. WPF control | Implement message list, compose box, streaming text, tool activity, explicit write approval, cancel, errors, keyboard access, and host theming. | Message list, compose box, streaming, tool activity, cancel, and a modal write-approval dialog are in the sample host. Host theming polish and accessibility review remain. |
 | 5. Runtime selection and packaging | Measure CPU and Vulkan on supported hardware, choose the faster stable backend, package runtime/model/licenses, and document fully offline installation. | Installer works without network on the minimum PC; fallback works. |
 | 6. Release hardening | Run held-out task evaluation, resource measurements, offline/network checks, fault injection, and integration guide review. | SRS acceptance evidence recorded and release gates met. |
@@ -29,11 +29,14 @@ LightLMChat/
   src/
     LightLMChat.Abstractions/
     LightLMChat.Core/
-    LightLMChat.FamilyTree/
+    LightLMChat.PcParts/
     LightLMChat.Wpf/
-    LightLMChat.SampleHost/
+  samples/
+    LightLMChat.ExampleApp/
   tests/
     LightLMChat.RuntimeChecks/
+    LightLMChat.ModelProbe/
+    LightLMChat.UnitTests/
   packaging/
   LICENSES/
 ```
@@ -60,5 +63,5 @@ Do not commit the 378 MB model to ordinary Git history. Record its source revisi
 
 ## Immediate next action
 
-Map the real family tree API's `find_people`, `get_person`, and `get_relatives` responses to `IFamilyTreeApi`, then run Phase 0 with representative names, ambiguous matches, and missing facts. The other reported API operations can follow after this first read-only workflow is measured.
+Run Phase 0 against the PC-parts catalog with a real model: measure tool/argument accuracy, latency, and RAM on representative, ambiguous, and out-of-domain requests; then package the offline runtime bundle (engine, model, hashes, licenses).
 

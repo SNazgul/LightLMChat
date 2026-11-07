@@ -11,6 +11,10 @@ public partial class LightLmChatControl : UserControl
     public static readonly DependencyProperty SessionProperty = DependencyProperty.Register(
         nameof(Session), typeof(IChatSession), typeof(LightLmChatControl));
 
+    public static readonly DependencyProperty NoticeTextProperty = DependencyProperty.Register(
+        nameof(NoticeText), typeof(string), typeof(LightLmChatControl),
+        new PropertyMetadata(string.Empty, OnNoticeTextChanged));
+
     private CancellationTokenSource? _requestCancellation;
 
     public LightLmChatControl()
@@ -22,6 +26,12 @@ public partial class LightLmChatControl : UserControl
     {
         get => (IChatSession?)GetValue(SessionProperty);
         set => SetValue(SessionProperty, value);
+    }
+
+    public string NoticeText
+    {
+        get => (string)GetValue(NoticeTextProperty);
+        set => SetValue(NoticeTextProperty, value);
     }
 
     public ObservableCollection<ChatMessage> Messages { get; } = [];
@@ -53,6 +63,14 @@ public partial class LightLmChatControl : UserControl
         Session?.Reset();
         StatusLabel.Text = "Ready";
         Composer.Focus();
+    }
+
+    private static void OnNoticeTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var control = (LightLmChatControl)d;
+        var text = (string)e.NewValue;
+        control.NoticeLabel.Text = text;
+        control.NoticeBanner.Visibility = string.IsNullOrWhiteSpace(text) ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private async Task SendCurrentAsync()
