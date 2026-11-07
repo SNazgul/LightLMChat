@@ -6,3 +6,5 @@
 artifacts/
 models/
 *.gguf
+dist/
+LightLMChat-ExampleApp.zip

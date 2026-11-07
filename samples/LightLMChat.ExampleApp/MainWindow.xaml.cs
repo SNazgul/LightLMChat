@@ -49,14 +49,32 @@ public partial class MainWindow : Window
         DetailDescription.Text = part.Description;
     }
 
-    private async void OnLoaded(object sender, RoutedEventArgs e)
+    private static (string? Server, string? Model) ResolveRuntime()
     {
+        // Environment variables take precedence; a bundled runtime/ folder is the fallback.
         var server = Environment.GetEnvironmentVariable("LIGHTLMCHAT_SERVER_PATH");
         var model = Environment.GetEnvironmentVariable("LIGHTLMCHAT_MODEL_PATH");
+
+        var runtimeDir = Path.Combine(AppContext.BaseDirectory, "runtime");
+        if (Directory.Exists(runtimeDir))
+        {
+            server = string.IsNullOrWhiteSpace(server)
+                ? Directory.EnumerateFiles(runtimeDir, "llama-server.exe", SearchOption.TopDirectoryOnly).FirstOrDefault()
+                : server;
+            model = string.IsNullOrWhiteSpace(model)
+                ? Directory.EnumerateFiles(runtimeDir, "*.gguf", SearchOption.TopDirectoryOnly).FirstOrDefault()
+                : model;
+        }
+        return (server, model);
+    }
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        var (server, model) = ResolveRuntime();
         if (string.IsNullOrWhiteSpace(server) || string.IsNullOrWhiteSpace(model))
         {
             ShowModelNotice(
-                "Local model not configured. Download the Granite 4.0 350M GGUF and llama-server, then set LIGHTLMCHAT_SERVER_PATH and LIGHTLMCHAT_MODEL_PATH (see scripts/prepare-runtime.ps1). The catalog is still browsable.",
+                "Local model not configured. Place llama-server.exe and the Granite GGUF model in a runtime/ folder next to this app, or set LIGHTLMCHAT_SERVER_PATH and LIGHTLMCHAT_MODEL_PATH (see scripts/prepare-runtime.ps1). The catalog is still browsable.",
                 inChat: true);
             return;
         }
@@ -80,7 +98,7 @@ public partial class MainWindow : Window
         catch (FileNotFoundException)
         {
             ShowModelNotice(
-                "Local model files not found. Download the Granite 4.0 350M GGUF and llama-server, then set LIGHTLMCHAT_SERVER_PATH and LIGHTLMCHAT_MODEL_PATH.",
+                "Local model files not found. Place them in a runtime/ folder next to this app, or set LIGHTLMCHAT_SERVER_PATH and LIGHTLMCHAT_MODEL_PATH.",
                 inChat: true);
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)

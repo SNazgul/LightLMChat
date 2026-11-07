@@ -45,6 +45,8 @@ For development, `scripts/prepare-runtime.ps1` downloads the pinned official CPU
 dotnet run --project tests/LightLMChat.ModelProbe
 ```
 
+To assemble a single offline folder (app + engine + model + licenses) that runs by double-click, see [packaging/README.md](packaging/README.md) and run `.\scripts\pack.ps1 -Zip`.
+
 The launcher uses CPU inference, a 2048-token context, a random local API key, and an available `127.0.0.1` port; if GPU initialization fails it falls back to CPU. The application itself does not download model or engine files at runtime. Run the model-free unit tests with `dotnet test`, and the transport/protocol/lifecycle integration check (which spawns a fake local server) with:
 
 ```powershell
