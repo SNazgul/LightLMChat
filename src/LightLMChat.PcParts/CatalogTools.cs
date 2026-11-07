@@ -95,18 +95,20 @@ public sealed class ListPartTypesTool(PcPartsCatalog catalog) : IApplicationTool
     }
 }
 
-/// <summary>Recommends the cheapest complete PC build: one lowest-priced part per category.</summary>
+/// <summary>Assembles a complete PC build: one lowest-priced part per category, optionally based on a CPU.</summary>
 public sealed class RecommendBuildTool(PcPartsCatalog catalog) : IApplicationTool
 {
     private static readonly string[] BuildTypes =
     [
-        "CPU", "Motherboard", "Memory", "Hard drive", "Video card", "Display",
+        "Motherboard", "Memory", "Hard drive", "Video card", "Display",
         "Keyboard", "Mouse", "Case", "Power supply", "Floppy drive", "I/O controller"
     ];
 
     public string Name => "recommend_build";
-    public string Description => "Recommend the cheapest complete PC build by picking the single lowest-priced part in each required category (CPU, motherboard, memory, hard drive, video card, display, keyboard, mouse, case, power supply, floppy drive, and I/O controller). Use for requests like 'assemble the cheapest PC' or 'what is the cheapest build'. This picks by price only and does not check compatibility between parts.";
-    public string ParametersSchemaJson => """{"type":"object","properties":{},"additionalProperties":false}""";
+    public string Description => "Assemble, build, or configure a complete PC by picking one part in each required category (CPU, motherboard, memory, hard drive, video card, display, keyboard, mouse, case, power supply, floppy drive, and I/O controller). It picks the lowest-priced part in each category, and may base the build on a specific CPU (for example '286', '386', or '486DX2'). Use this tool for any request to assemble, build, or put together a whole PC, such as 'assemble the cheapest PC' or 'build a PC around the 286 CPU'. Compatibility between parts is not checked.";
+    public string ParametersSchemaJson => """
+        {"type":"object","properties":{"cpu":{"type":"string","description":"Optional CPU to base the build on, e.g. 286, 386, or 486DX2","maxLength":40}},"additionalProperties":false}
+        """;
     public ToolAccess Access => ToolAccess.ReadOnly;
 
     public string? OutputSchemaJson => """
@@ -115,18 +117,49 @@ public sealed class RecommendBuildTool(PcPartsCatalog catalog) : IApplicationToo
 
     public IReadOnlyList<ToolUsageExample> Examples => new[]
     {
-        new ToolUsageExample("Assemble the cheapest PC", new JsonObject())
+        new ToolUsageExample("Assemble the cheapest PC", new JsonObject()),
+        new ToolUsageExample("Build a PC around the 286 CPU", new JsonObject { ["cpu"] = "286" })
     };
 
     public ValueTask<JsonNode?> ExecuteAsync(JsonObject arguments, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var picks = BuildTypes.Select(catalog.Cheapest).OfType<PcPart>().ToArray();
+
+        var cpuArg = arguments["cpu"]?.GetValue<string>()?.Trim();
+        var basedOnCpu = !string.IsNullOrWhiteSpace(cpuArg);
+
+        PcPart? cpu = null;
+        if (basedOnCpu)
+        {
+            cpu = catalog.All
+                .Where(p => p.Type == "CPU" && p.Subtype.Contains(cpuArg!, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(p => p.PriceUsd)
+                .FirstOrDefault();
+            if (cpu is null)
+                return ValueTask.FromResult<JsonNode?>(new JsonObject
+                {
+                    ["display_text"] = $"I could not find a CPU matching \"{cpuArg}\" in the catalog."
+                });
+        }
+        cpu ??= catalog.Cheapest("CPU");
+        if (cpu is null)
+            return ValueTask.FromResult<JsonNode?>(new JsonObject { ["display_text"] = "No CPU is available in the catalog." });
+
+        var picks = new List<PcPart> { cpu };
+        foreach (var type in BuildTypes)
+        {
+            var cheapest = catalog.Cheapest(type);
+            if (cheapest is not null) picks.Add(cheapest);
+        }
+
         var total = picks.Sum(p => p.PriceUsd);
         var lines = picks.Select(p => $"- {p.Type}: {p.Subtype} ({p.Company}) — ${p.PriceUsd}");
+        var header = basedOnCpu
+            ? $"Cheapest complete build based on the {cpu.Subtype}:\n"
+            : "Cheapest complete build (one part per category):\n";
         return ValueTask.FromResult<JsonNode?>(new JsonObject
         {
-            ["display_text"] = "Cheapest complete build (one part per category):\n" + string.Join("\n", lines) + $"\n\nTotal: ${total}",
+            ["display_text"] = header + string.Join("\n", lines) + $"\n\nTotal: ${total}",
             ["total_price_usd"] = total,
             ["parts"] = new JsonArray(picks.Select(p => (JsonNode?)new JsonObject
             {

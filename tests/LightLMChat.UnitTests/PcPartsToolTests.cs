@@ -69,4 +69,16 @@ public class RecommendBuildToolTests
         var cpuCount = text.Split('\n').Count(line => line.StartsWith("- CPU:", StringComparison.Ordinal));
         Assert.Equal(1, cpuCount);
     }
+
+    [Fact]
+    public async Task Bases_build_on_requested_cpu()
+    {
+        var catalog = new PcPartsCatalog();
+        var result = await new ToolBroker(new ToolCatalog([new RecommendBuildTool(catalog)]))
+            .ExecuteAsync("recommend_build", new JsonObject { ["cpu"] = "286" }, CancellationToken.None);
+
+        var text = result["result"]?["display_text"]?.GetValue<string>() ?? "";
+        Assert.Contains("Intel 80286", text);
+        Assert.Equal(1, text.Split('\n').Count(line => line.StartsWith("- CPU:", StringComparison.Ordinal)));
+    }
 }
