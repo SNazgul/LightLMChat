@@ -20,6 +20,7 @@ public partial class LightLmChatControl : UserControl
     public LightLmChatControl()
     {
         InitializeComponent();
+        UpdateComposerState();
     }
 
     public IChatSession? Session
@@ -55,6 +56,20 @@ public partial class LightLmChatControl : UserControl
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e) => _requestCancellation?.Cancel();
+
+    private void Composer_TextChanged(object sender, TextChangedEventArgs e) => UpdateComposerState();
+
+    private void Composer_FocusChanged(object sender, KeyboardFocusChangedEventArgs e) => UpdateComposerState();
+
+    private void UpdateComposerState()
+    {
+        if (Composer is null || ComposerPlaceholder is null || SendButton is null) return;
+        ComposerPlaceholder.Visibility = _requestCancellation is null &&
+                                         string.IsNullOrEmpty(Composer.Text) &&
+                                         !Composer.IsKeyboardFocusWithin
+            ? Visibility.Visible : Visibility.Collapsed;
+        SendButton.IsEnabled = _requestCancellation is null && !string.IsNullOrWhiteSpace(Composer.Text);
+    }
 
     private void ClearButton_Click(object sender, RoutedEventArgs e)
     {
@@ -179,5 +194,6 @@ public partial class LightLmChatControl : UserControl
         Composer.IsEnabled = !busy;
         ClearButton.IsEnabled = !busy;
         if (busy) StatusLabel.Text = "Working…";
+        UpdateComposerState();
     }
 }
