@@ -12,6 +12,12 @@ LightLMChat builds on the following third-party components. Their binaries are n
 - GGUF files: <https://huggingface.co/ibm-granite/granite-4.0-350m-GGUF>
 - License: **Apache-2.0**
 
+## Qwen2.5 1.5B Instruct (language model)
+
+- Project: <https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct>
+- GGUF files: <https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF>
+- License: **Apache-2.0**
+
 ## llama.cpp (inference engine)
 
 - Project: <https://github.com/ggml-org/llama.cpp>

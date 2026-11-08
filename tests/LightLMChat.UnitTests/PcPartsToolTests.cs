@@ -81,6 +81,16 @@ public class RecommendBuildToolTests
         Assert.Contains("Intel 80286", text);
         Assert.Equal(1, text.Split('\n').Count(line => line.StartsWith("- CPU:", StringComparison.Ordinal)));
     }
+
+    [Fact]
+    public async Task Asks_to_clarify_when_best_is_requested()
+    {
+        var catalog = new PcPartsCatalog();
+        var result = await new ToolBroker(new ToolCatalog([new RecommendBuildTool(catalog)]))
+            .ExecuteAsync("recommend_build", new JsonObject { ["criterion"] = "best" }, CancellationToken.None);
+        var text = result["result"]?["display_text"]?.GetValue<string>() ?? "";
+        Assert.Contains("can't judge", text);
+    }
 }
 
 public class SearchPartsToolNormalizerTests

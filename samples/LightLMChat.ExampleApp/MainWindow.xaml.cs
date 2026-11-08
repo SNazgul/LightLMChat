@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using LightLMChat.Core;
@@ -62,12 +63,28 @@ public partial class MainWindow : Window
         return null;
     }
 
+    private static (string? Server, string? Model) LoadConfiguration()
+    {
+        var configPath = Path.Combine(AppContext.BaseDirectory, "lightlmchat.config.json");
+        if (!File.Exists(configPath))
+            return (null, null);
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(configPath));
+        var root = doc.RootElement;
+        string? server = root.TryGetProperty("serverPath", out var s) && s.ValueKind == JsonValueKind.String
+            ? s.GetString()
+            : null;
+        string? model = root.TryGetProperty("modelPath", out var m) && m.ValueKind == JsonValueKind.String
+            ? m.GetString()
+            : null;
+        return (server, model);
+    }
+
     private static (string? Server, string? Model) ResolveRuntime()
     {
-        // Precedence: environment variables, then a bundled runtime/ folder next to the app,
-        // then the scripts/prepare-runtime.ps1 dev layout (models/ + artifacts/) found by walking up.
-        var server = Environment.GetEnvironmentVariable("LIGHTLMCHAT_SERVER_PATH");
-        var model = Environment.GetEnvironmentVariable("LIGHTLMCHAT_MODEL_PATH");
+        // lightlmchat.config.json takes precedence; otherwise auto-discover the runtime
+        // (a bundled runtime/ folder, or the scripts/prepare-runtime.ps1 layout).
+        var (server, model) = LoadConfiguration();
 
         var baseDir = AppContext.BaseDirectory;
         var cwd = Directory.GetCurrentDirectory();
@@ -95,7 +112,7 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(server) || string.IsNullOrWhiteSpace(model))
         {
             ShowModelNotice(
-                "Local model not found. Run scripts/prepare-runtime.ps1 to download the engine and model, or set LIGHTLMCHAT_SERVER_PATH and LIGHTLMCHAT_MODEL_PATH. The catalog is still browsable.",
+                "Local model not found. Run scripts/prepare-runtime.ps1 to download the engine and model, or set their paths in lightlmchat.config.json. The catalog is still browsable.",
                 inChat: true);
             return;
         }
@@ -117,13 +134,19 @@ public partial class MainWindow : Window
                 new ListPartTypesTool(_catalog),
                 new RecommendBuildTool(_catalog)
             ]);
-            Chat.Session = new LlamaChatSession(_runtime, tools);
+            Chat.Session = new LlamaChatSession(_runtime, tools, systemPrompt:
+                "You are a helpful assistant for an IBM PC parts catalog (286-486 era). " +
+                "Use the tools to look up parts or assemble a build. " +
+                "You can compare parts only by price and listed specifications. " +
+                "If the user asks for 'the best', 'fastest', or another subjective quality, " +
+                "explain what you can compare and ask what matters to them. " +
+                "If a request is ambiguous, ask the user to clarify.");
             ShowModelNotice("Local model active — ask about IBM PC parts (286–486), e.g. \"What Intel 486 CPUs do you have?\"");
         }
         catch (FileNotFoundException)
         {
             ShowModelNotice(
-                "Local model files not found. Run scripts/prepare-runtime.ps1, or set LIGHTLMCHAT_SERVER_PATH and LIGHTLMCHAT_MODEL_PATH.",
+                "Local model files not found. Run scripts/prepare-runtime.ps1, or set their paths in lightlmchat.config.json.",
                 inChat: true);
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)

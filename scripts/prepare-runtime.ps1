@@ -1,7 +1,21 @@
+param(
+    # Model key from docs/model-and-runtime-manifest.json (e.g. granite-350m or qwen2.5-1.5b).
+    # Defaults to the manifest's defaultModel.
+    [string]$Model = ''
+)
+
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $manifest = Get-Content -LiteralPath (Join-Path $repositoryRoot 'docs/model-and-runtime-manifest.json') -Raw | ConvertFrom-Json
+
+$modelKey = if ($Model) { $Model } else { $manifest.defaultModel }
+$modelInfo = $manifest.models.$modelKey
+if (-not $modelInfo) {
+    $available = ($manifest.models.PSObject.Properties.Name | Sort-Object) -join ', '
+    throw "Unknown model '$modelKey'. Available models: $available"
+}
+
 $downloads = Join-Path $repositoryRoot 'artifacts/downloads'
 $engineDir = Join-Path $repositoryRoot ('artifacts/llama-' + $manifest.engine.version)
 $modelDir = Join-Path $repositoryRoot 'models'
@@ -24,9 +38,9 @@ function Get-VerifiedFile {
 }
 
 $engineZip = Join-Path $downloads $manifest.engine.file
-$modelPath = Join-Path $modelDir $manifest.model.file
+$modelPath = Join-Path $modelDir $modelInfo.file
 Get-VerifiedFile $manifest.engine $engineZip
-Get-VerifiedFile $manifest.model $modelPath
+Get-VerifiedFile $modelInfo $modelPath
 
 $server = Get-ChildItem -LiteralPath $engineDir -Filter 'llama-server.exe' -File -Recurse |
     Select-Object -First 1 -ExpandProperty FullName
@@ -37,8 +51,14 @@ if (-not $server) {
 }
 if (-not $server) { throw 'llama-server.exe was not found in the verified archive.' }
 
+$configPath = Join-Path $repositoryRoot 'samples/LightLMChat.ExampleApp/lightlmchat.config.json'
+[ordered]@{ serverPath = $server; modelPath = $modelPath } |
+    ConvertTo-Json |
+    Set-Content -LiteralPath $configPath -Encoding utf8
+
+Write-Output "Model:          $($modelInfo.name) ($modelKey)"
 Write-Output "Verified engine: $server"
-Write-Output "Verified model: $modelPath"
-Write-Output 'Set these environment variables for the sample host:'
-Write-Output "`$env:LIGHTLMCHAT_SERVER_PATH = '$server'"
-Write-Output "`$env:LIGHTLMCHAT_MODEL_PATH = '$modelPath'"
+Write-Output "Verified model:  $modelPath"
+Write-Output "Selected in:     $configPath"
+Write-Output ''
+Write-Output 'Run: dotnet run --project samples/LightLMChat.ExampleApp'

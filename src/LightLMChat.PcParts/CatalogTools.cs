@@ -136,9 +136,9 @@ public sealed class RecommendBuildTool(PcPartsCatalog catalog) : IApplicationToo
     ];
 
     public string Name => "recommend_build";
-    public string Description => "Assemble, build, or configure a complete PC by picking one part in each required category (CPU, motherboard, memory, hard drive, video card, display, keyboard, mouse, case, power supply, floppy drive, and I/O controller). It picks the lowest-priced part in each category, and may base the build on a specific CPU (for example '286', '386', or '486DX2'). Use this tool for any request to assemble, build, or put together a whole PC, such as 'assemble the cheapest PC' or 'build a PC around the 286 CPU'. Compatibility between parts is not checked.";
+    public string Description => "Assemble, build, or configure a complete PC by picking one part in each required category (CPU, motherboard, memory, hard drive, video card, display, keyboard, mouse, case, power supply, floppy drive, and I/O controller). Use this tool for any request to assemble, build, or put together a whole PC, such as 'assemble the cheapest PC' or 'build a PC around the 286 CPU'. It picks parts by a criterion: 'cheapest' (default) picks the lowest-priced part in each category; 'best' or 'fastest' cannot be judged from price and specifications alone, so it asks the user to clarify instead of guessing. Compatibility between parts is not checked.";
     public string ParametersSchemaJson => """
-        {"type":"object","properties":{"cpu":{"type":"string","description":"Optional CPU to base the build on, e.g. 286, 386, or 486DX2","maxLength":40}},"additionalProperties":false}
+        {"type":"object","properties":{"cpu":{"type":"string","description":"Optional CPU to base the build on, e.g. 286, 386, or 486DX2","maxLength":40},"criterion":{"type":"string","description":"How to choose parts: cheapest (default), fastest, or best","enum":["cheapest","fastest","best"]}},"additionalProperties":false}
         """;
     public ToolAccess Access => ToolAccess.ReadOnly;
 
@@ -155,6 +155,15 @@ public sealed class RecommendBuildTool(PcPartsCatalog catalog) : IApplicationToo
     public ValueTask<JsonNode?> ExecuteAsync(JsonObject arguments, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
+        var criterion = arguments["criterion"]?.GetValue<string>()?.Trim().ToLowerInvariant() ?? "cheapest";
+        if (criterion is "best" or "fastest")
+        {
+            return ValueTask.FromResult<JsonNode?>(new JsonObject
+            {
+                ["display_text"] = "I can't judge what is 'best' or 'fastest' because I only have each part's price and basic specifications — not enough to compare overall quality or speed. I can recommend the cheapest build, or list parts by their specifications. Which would you like?"
+            });
+        }
 
         var cpuArg = arguments["cpu"]?.GetValue<string>()?.Trim();
         var basedOnCpu = !string.IsNullOrWhiteSpace(cpuArg);
