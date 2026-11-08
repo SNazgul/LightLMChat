@@ -82,3 +82,24 @@ public class RecommendBuildToolTests
         Assert.Equal(1, text.Split('\n').Count(line => line.StartsWith("- CPU:", StringComparison.Ordinal)));
     }
 }
+
+public class SearchPartsToolNormalizerTests
+{
+    private readonly SearchPartsTool _tool = new(new PcPartsCatalog());
+
+    [Fact]
+    public void Keeps_query_that_overlaps_the_request()
+    {
+        var result = _tool.NormalizeProposal("What Intel 486 CPUs do you have?",
+            new JsonObject { ["query"] = "Intel 486" });
+        Assert.Equal("Intel 486", result?["query"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void Grounds_query_when_it_does_not_overlap()
+    {
+        var result = _tool.NormalizeProposal("get father",
+            new JsonObject { ["query"] = "FDDASDASSDA" });
+        Assert.Equal("father", result?["query"]?.GetValue<string>());
+    }
+}

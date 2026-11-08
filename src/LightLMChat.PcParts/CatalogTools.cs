@@ -1,10 +1,11 @@
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using LightLMChat.Abstractions;
 
 namespace LightLMChat.PcParts;
 
 /// <summary>Searches the IBM PC parts catalog (286–486 era) by keyword.</summary>
-public sealed class SearchPartsTool(PcPartsCatalog catalog) : IApplicationTool
+public sealed class SearchPartsTool(PcPartsCatalog catalog) : IApplicationTool, IToolProposalNormalizer
 {
     public string Name => "search_parts";
     public string Description => "Search the IBM PC parts catalog (286 to 486 era) by keywords such as a part type, model, or company. Use it to answer questions about available CPUs, motherboards, memory, hard drives, displays, mice, keyboards, and other PC components.";
@@ -66,6 +67,36 @@ public sealed class SearchPartsTool(PcPartsCatalog catalog) : IApplicationTool
         ["description"] = p.Description,
         ["price_usd"] = p.PriceUsd
     }).ToArray());
+
+    private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "get", "find", "show", "me", "about", "a", "an", "the", "for", "of", "with", "to",
+        "what", "which", "do", "does", "have", "has", "is", "are", "can", "could", "you",
+        "please", "tell", "sell", "want", "need", "available", "list"
+    };
+
+    public JsonObject? NormalizeProposal(string userMessage, JsonObject proposedArguments)
+    {
+        var proposed = proposedArguments["query"]?.GetValue<string>()?.Trim() ?? "";
+        var userWords = ExtractWords(userMessage);
+        var proposedWords = ExtractWords(proposed);
+        var userWordSet = new HashSet<string>(userWords, StringComparer.OrdinalIgnoreCase);
+
+        // Trust the model when its query overlaps the current request; otherwise ground the
+        // query in the user's message so a stale or hallucinated query cannot repeat.
+        if (proposedWords.Length > 0 && proposedWords.Any(userWordSet.Contains))
+            return proposedArguments;
+
+        var query = string.Join(" ", userWords.Where(w => !StopWords.Contains(w)));
+        if (string.IsNullOrWhiteSpace(query))
+            query = userMessage.Trim();
+        if (query.Length > 80)
+            query = query[..80];
+        return new JsonObject { ["query"] = query };
+    }
+
+    private static string[] ExtractWords(string text) =>
+        Regex.Matches(text, @"[\p{L}\p{N}'-]+").Select(m => m.Value).ToArray();
 }
 
 /// <summary>Lists the part types available in the catalog.</summary>
