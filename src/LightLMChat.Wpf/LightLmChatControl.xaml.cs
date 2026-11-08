@@ -174,8 +174,8 @@ public partial class LightLmChatControl : UserControl
 
     private void SetBusy(bool busy)
     {
-        SendButton.IsEnabled = !busy;
-        CancelButton.IsEnabled = busy;
+        SendButton.Visibility = busy ? Visibility.Collapsed : Visibility.Visible;
+        CancelButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         Composer.IsEnabled = !busy;
         ClearButton.IsEnabled = !busy;
         if (busy) StatusLabel.Text = "Working…";
