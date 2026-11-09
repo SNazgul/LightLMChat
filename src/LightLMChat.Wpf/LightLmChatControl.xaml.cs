@@ -158,8 +158,12 @@ public partial class LightLmChatControl : UserControl
     private static void OnMultiModelEnabledChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var control = (LightLmChatControl)d;
-        if (control.ModelSelector is null) return;
-        control.ModelSelector.Visibility = (bool)e.NewValue ? Visibility.Visible : Visibility.Collapsed;
+        if (control.ModelSelector is null || control.FooterHint is null) return;
+        var enabled = (bool)e.NewValue;
+        control.ModelSelector.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
+        Grid.SetRow(control.FooterHint, enabled ? 0 : 1);
+        Grid.SetColumnSpan(control.FooterHint, enabled ? 2 : 1);
+        control.FooterHint.Margin = enabled ? new Thickness(0, 0, 0, 6) : new Thickness(0, 0, 10, 0);
     }
 
     private static void OnModelOptionsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
