@@ -42,7 +42,7 @@ public sealed class LookupContactTool(IContactStore contacts) : IApplicationTool
         if (contact is null)
             return new JsonObject { ["display_text"] = "No matching contact was found." };
 
-        // display_text is shown to the user verbatim, so a small model cannot rewrite the data.
+        // By default, display_text is shown verbatim so a small model cannot rewrite the data.
         return new JsonObject
         {
             ["display_text"] = $"{contact.Name}: {contact.Phone}, {contact.Email}",
@@ -143,7 +143,31 @@ Chat.Session = session;   // any IChatSession
 The control renders streamed text, tool activity, busy/error state, cancel, and a clear-chat action.
 Call `session.Reset()` (or the control's **Clear chat**) to start a new conversation.
 
-## 7. Limits
+## 7. Thinking models
+
+The example app enables thinking automatically when the selected filename starts with `Qwen3-` or
+`SmolLM3-`. To opt in from another host, use a bounded reasoning budget and a larger completion
+limit. The model file and `llama-server` must support thinking mode.
+
+```csharp
+var runtime = await LlamaServerRuntime.StartAsync(new LlamaServerOptions(
+    serverPath, modelPath, ContextSize: 4096, ReasoningBudget: 256));
+var session = new LlamaChatSession(runtime, catalog, approval,
+    limits: new ChatRequestLimits { MaxGenerationTokens = 1024 },
+    enableThinking: true);
+```
+
+`ReasoningBudget` caps thinking tokens in `llama-server`. Without a cap, a small model can use
+the whole completion allowance on its internal reasoning and return no answer. When thinking is
+enabled, the session uses Qwen3's recommended sampling values. The default keeps thinking off
+for models that do not support it.
+
+Tool `display_text` is shown directly by default. This protects exact application data from
+being rewritten by a small model. Hosts with a capable model can opt into
+`reasonAboutToolResults: true` to have the model compose an answer from structured tool results;
+validate that behavior on real host data before enabling it.
+
+## 8. Limits
 
 `LlamaChatSession` accepts optional `ChatRequestLimits` to bound each request: `MaxToolCalls`
 (sequential tool calls, default 1), `MaxGenerationTokens` (default 256), and `MaxElapsed` (optional

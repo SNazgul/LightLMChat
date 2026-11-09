@@ -113,3 +113,102 @@ public class SearchPartsToolNormalizerTests
         Assert.Equal("father", result?["query"]?.GetValue<string>());
     }
 }
+
+public class CompareCpusToolTests
+{
+    private static async Task<string> Answer(string? criterion)
+    {
+        var tool = new CompareCpusTool(new PcPartsCatalog());
+        var arguments = new JsonObject();
+        if (criterion is not null) arguments["criterion"] = criterion;
+        var result = await new ToolBroker(new ToolCatalog([tool]))
+            .ExecuteAsync(tool.Name, arguments, CancellationToken.None);
+        return result["result"]?["display_text"]?.GetValue<string>() ?? "";
+    }
+
+    [Fact]
+    public async Task Best_cpu_requires_criteria()
+    {
+        Assert.Contains("cannot identify one overall best", await Answer("best"));
+        Assert.Contains("Which criterion", await Answer(null));
+    }
+
+    [Fact]
+    public async Task Cheapest_cpu_uses_catalog_price()
+    {
+        Assert.Contains("Cyrix Cx486DLC-33", await Answer("cheapest"));
+    }
+
+    [Fact]
+    public async Task Highest_clock_is_not_called_fastest()
+    {
+        var answer = await Answer("highest_clock");
+        Assert.Contains("100 MHz", answer);
+        Assert.Contains("Clock speed alone", answer);
+    }
+}
+
+public class SearchPartsTypeFilterTests
+{
+    [Theory]
+    [InlineData("Intel 486", "CPU")]
+    [InlineData("VGA", "Display")]
+    public async Task Search_only_returns_requested_type(string query, string partType)
+    {
+        var tool = new SearchPartsTool(new PcPartsCatalog());
+        var result = await new ToolBroker(new ToolCatalog([tool])).ExecuteAsync(tool.Name,
+            new JsonObject { ["query"] = query, ["part_type"] = partType }, CancellationToken.None);
+        var parts = result["result"]?["parts"]?.AsArray();
+        Assert.NotNull(parts);
+        Assert.NotEmpty(parts!);
+        Assert.All(parts!, part => Assert.Equal(partType, part?["type"]?.GetValue<string>()));
+    }
+
+    [Fact]
+    public void Normalizer_derives_monitor_type_from_user_request()
+    {
+        var tool = new SearchPartsTool(new PcPartsCatalog());
+        var result = tool.NormalizeProposal("Show me VGA monitors", new JsonObject { ["query"] = "VGA" });
+        Assert.Equal("Display", result?["part_type"]?.GetValue<string>());
+    }
+}
+
+public class CatalogKeywordSearchTests
+{
+    [Fact]
+    public void Multiple_keywords_must_all_match()
+    {
+        var parts = new PcPartsCatalog().Search("Intel 486", "CPU");
+        Assert.Equal(4, parts.Count);
+        Assert.All(parts, part => Assert.Equal("Intel", part.Company));
+        Assert.All(parts, part => Assert.Contains("486", part.Subtype));
+    }
+}
+
+public class SubjectiveCriterionGuardTests
+{
+    [Fact]
+    public void Best_cpu_cannot_be_rewritten_as_cheapest()
+    {
+        var tool = new CompareCpusTool(new PcPartsCatalog());
+        var result = tool.NormalizeProposal("choose best CPU",
+            new JsonObject { ["criterion"] = "cheapest" });
+        Assert.Equal("best", result?["criterion"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void Best_build_cannot_default_to_cheapest()
+    {
+        var tool = new RecommendBuildTool(new PcPartsCatalog());
+        var result = tool.NormalizeProposal("build the best PC", new JsonObject());
+        Assert.Equal("best", result?["criterion"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void Best_is_not_used_as_a_catalog_keyword()
+    {
+        var tool = new SearchPartsTool(new PcPartsCatalog());
+        var result = tool.NormalizeProposal("choose best CPU", new JsonObject { ["query"] = "best CPU" });
+        Assert.Equal("CPU", result?["query"]?.GetValue<string>());
+    }
+}

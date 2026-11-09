@@ -32,15 +32,20 @@ public sealed class PcPartsCatalog
         .ThenBy(p => p.Subtype, StringComparer.Ordinal)
         .FirstOrDefault();
 
-    public IReadOnlyList<PcPart> Search(string query)
+    public IReadOnlyList<PcPart> Search(string query, string? partType = null)
     {
         var terms = query.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(t => t.ToLowerInvariant())
             .Where(t => t.Length > 0)
             .ToArray();
         if (terms.Length == 0) return [];
+        var namedCompany = _parts.Select(p => p.Company)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(company => terms.Contains(company.ToLowerInvariant()));
 
         return _parts
+            .Where(p => partType is null || p.Type.Equals(partType, StringComparison.OrdinalIgnoreCase))
+            .Where(p => namedCompany is null || p.Company.Equals(namedCompany, StringComparison.OrdinalIgnoreCase))
             .Select(p => new { Part = p, Score = Score(p, terms) })
             .Where(x => x.Score > 0)
             .OrderByDescending(x => x.Score)
@@ -57,14 +62,17 @@ public sealed class PcPartsCatalog
         var score = 0;
         foreach (var term in terms)
         {
+            var matched = false;
             for (var i = 0; i < fields.Length; i++)
             {
                 if (fields[i].Contains(term, StringComparison.OrdinalIgnoreCase))
                 {
                     score += fields.Length - i;
+                    matched = true;
                     break;
                 }
             }
+            if (!matched) return 0;
         }
         return score;
     }

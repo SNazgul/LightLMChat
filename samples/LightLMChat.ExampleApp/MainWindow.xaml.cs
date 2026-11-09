@@ -120,8 +120,13 @@ public partial class MainWindow : Window
         ShowModelNotice("Starting local model…");
         try
         {
+            var enableThinking = Path.GetFileName(model).StartsWith("Qwen3-", StringComparison.OrdinalIgnoreCase)
+                || Path.GetFileName(model).StartsWith("SmolLM3-", StringComparison.OrdinalIgnoreCase);
             var runtime = await LlamaServerRuntime.StartAsync(
-                new LlamaServerOptions(server, model), _lifetime.Token);
+                new LlamaServerOptions(server, model,
+                    ContextSize: enableThinking ? 4096 : 2048,
+                    ReasoningBudget: enableThinking ? 256 : null),
+                _lifetime.Token);
             if (_lifetime.IsCancellationRequested)
             {
                 await runtime.DisposeAsync();
@@ -131,16 +136,23 @@ public partial class MainWindow : Window
 
             var tools = new ToolCatalog([
                 new SearchPartsTool(_catalog),
+                new CompareCpusTool(_catalog),
                 new ListPartTypesTool(_catalog),
                 new RecommendBuildTool(_catalog)
             ]);
-            Chat.Session = new LlamaChatSession(_runtime, tools, systemPrompt:
+            Chat.Session = new LlamaChatSession(_runtime, tools,
+                limits: new ChatRequestLimits { MaxGenerationTokens = enableThinking ? 1024 : 256 },
+                enableThinking: enableThinking,
+                reasonAboutToolResults: false,
+                systemPrompt:
                 "You are a helpful assistant for an IBM PC parts catalog (286-486 era). " +
-                "Use the tools to look up parts or assemble a build. " +
-                "You can compare parts only by price and listed specifications. " +
-                "If the user asks for 'the best', 'fastest', or another subjective quality, " +
-                "explain what you can compare and ask what matters to them. " +
-                "If a request is ambiguous, ask the user to clarify.");
+                "Use tools to look up catalog facts. For CPU-only questions, use compare_cpus; " +
+                "use recommend_build only when the user asks for a complete PC. " +
+                "The catalog contains CPUs, prices, and basic specifications, but no benchmarks. " +
+                "If the user asks for the best CPU without a measurable criterion, explain " +
+                "that you cannot rank overall performance and ask whether price or listed " +
+                "clock speed matters. Never invent catalog facts. After a tool call, use " +
+                "only the returned data and state when it cannot support a conclusion.");
             ShowModelNotice("Local model active — ask about IBM PC parts (286–486), e.g. \"What Intel 486 CPUs do you have?\"");
         }
         catch (FileNotFoundException)

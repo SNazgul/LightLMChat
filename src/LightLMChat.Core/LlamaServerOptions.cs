@@ -6,7 +6,8 @@ public sealed record LlamaServerOptions(
     string ModelPath,
     int ContextSize = 2048,
     int GpuLayers = 0,
-    TimeSpan? StartupTimeout = null)
+    TimeSpan? StartupTimeout = null,
+    int? ReasoningBudget = null)
 {
     internal void Validate()
     {
@@ -20,5 +21,7 @@ public sealed record LlamaServerOptions(
             throw new ArgumentOutOfRangeException(nameof(GpuLayers));
         if (StartupTimeout is { } timeout && timeout <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(StartupTimeout));
+        if (ReasoningBudget is < 0 or > 4096)
+            throw new ArgumentOutOfRangeException(nameof(ReasoningBudget));
     }
 }

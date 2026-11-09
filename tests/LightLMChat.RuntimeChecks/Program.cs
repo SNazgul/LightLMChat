@@ -17,7 +17,8 @@ try
 {
     var executable = Environment.ProcessPath ?? throw new Exception("No executable path.");
     await using var runtime = await LlamaServerRuntime.StartAsync(
-        new LlamaServerOptions(executable, modelFile, StartupTimeout: TimeSpan.FromSeconds(10)));
+        new LlamaServerOptions(executable, modelFile,
+            StartupTimeout: TimeSpan.FromSeconds(10), ReasoningBudget: 256));
     var session = new LlamaChatSession(runtime);
 
     var output = new System.Text.StringBuilder();
@@ -86,6 +87,17 @@ try
     await foreach (var chatEvent in tokenSession.SendAsync("test max tokens", CancellationToken.None))
         if (chatEvent is TextDeltaEvent delta) output.Append(delta.Text);
     Check(output.ToString() == "321", "MaxGenerationTokens was not forwarded to the model.");
+
+    // Thinking mode must reach the server and structured tool results must reach final generation.
+    var thinkingSession = new LlamaChatSession(runtime, catalog,
+        limits: new ChatRequestLimits { MaxGenerationTokens = 1024 },
+        enableThinking: true, reasonAboutToolResults: true);
+    output.Clear();
+    await foreach (var chatEvent in thinkingSession.SendAsync(
+        "test thinking tool flow", CancellationToken.None))
+        if (chatEvent is TextDeltaEvent delta) output.Append(delta.Text);
+    Check(output.ToString() == "done",
+        "Thinking mode did not pass structured tool data to final generation.");
 
     // Bounded multi-tool loop: the model keeps proposing calls, the session must stop at MaxToolCalls.
     var chainTool = new ChainStepTool();
@@ -214,6 +226,8 @@ static async Task RunFakeServerAsync(string[] arguments)
     var model = arguments[Array.IndexOf(arguments, "--model") + 1];
     var gpuLayers = int.Parse(arguments[Array.IndexOf(arguments, "--gpu-layers") + 1],
         System.Globalization.CultureInfo.InvariantCulture);
+    var reasoningBudgetIndex = Array.IndexOf(arguments, "--reasoning-budget");
+    var reasoningBudget = reasoningBudgetIndex < 0 ? null : arguments[reasoningBudgetIndex + 1];
 
     if (model.Contains("fail-exit", StringComparison.Ordinal))
     {
@@ -248,6 +262,14 @@ static async Task RunFakeServerAsync(string[] arguments)
         var last = messages[messages.GetArrayLength() - 1];
         if (payload.RootElement.TryGetProperty("tools", out var tools))
         {
+            if (last.GetProperty("content").GetString() == "test thinking tool flow" &&
+                (reasoningBudget != "256" ||
+                 payload.RootElement.GetProperty("reasoning_effort").GetString() != "default" ||
+                 payload.RootElement.GetProperty("max_tokens").GetInt32() < 1024))
+            {
+                context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                return;
+            }
             var functions = tools.EnumerateArray()
                 .Select(t => t.GetProperty("function"))
                 .ToArray();
@@ -312,6 +334,13 @@ static async Task RunFakeServerAsync(string[] arguments)
         context.Response.ContentType = "text/event-stream";
         if (last.GetProperty("role").GetString() == "tool")
         {
+            if (messages[1].GetProperty("content").GetString() == "test thinking tool flow" &&
+                (payload.RootElement.GetProperty("reasoning_effort").GetString() != "default" ||
+                 payload.RootElement.GetProperty("max_tokens").GetInt32() != 1024))
+            {
+                context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                return;
+            }
             await WriteChunkAsync(context, "done");
             await context.Response.WriteAsync("data: [DONE]\n\n", context.RequestAborted);
             return;

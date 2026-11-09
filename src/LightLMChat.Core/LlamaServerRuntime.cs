@@ -81,6 +81,11 @@ public sealed class LlamaServerRuntime : IAsyncDisposable
             "--jinja",
             "--no-webui"
         }) start.ArgumentList.Add(argument);
+        if (options.ReasoningBudget is { } reasoningBudget)
+        {
+            start.ArgumentList.Add("--reasoning-budget");
+            start.ArgumentList.Add(reasoningBudget.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
         start.Environment["LLAMA_API_KEY"] = apiKey;
 
         var process = new Process { StartInfo = start, EnableRaisingEvents = true };
