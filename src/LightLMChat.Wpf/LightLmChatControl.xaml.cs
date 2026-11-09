@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
@@ -15,7 +16,16 @@ public partial class LightLmChatControl : UserControl
         nameof(NoticeText), typeof(string), typeof(LightLmChatControl),
         new PropertyMetadata(string.Empty, OnNoticeTextChanged));
 
+    public static readonly DependencyProperty MultiModelEnabledProperty = DependencyProperty.Register(
+        nameof(MultiModelEnabled), typeof(bool), typeof(LightLmChatControl),
+        new PropertyMetadata(false, OnMultiModelEnabledChanged));
+
+    public static readonly DependencyProperty ModelOptionsProperty = DependencyProperty.Register(
+        nameof(ModelOptions), typeof(IEnumerable<string>), typeof(LightLmChatControl),
+        new PropertyMetadata(null, OnModelOptionsChanged));
+
     private CancellationTokenSource? _requestCancellation;
+    private bool _suppressModelSelectionChanged;
 
     public LightLmChatControl()
     {
@@ -34,6 +44,23 @@ public partial class LightLmChatControl : UserControl
         get => (string)GetValue(NoticeTextProperty);
         set => SetValue(NoticeTextProperty, value);
     }
+
+    /// <summary>When true, shows the model selector; the host handles <see cref="ModelSelectionChanged"/>.</summary>
+    public bool MultiModelEnabled
+    {
+        get => (bool)GetValue(MultiModelEnabledProperty);
+        set => SetValue(MultiModelEnabledProperty, value);
+    }
+
+    /// <summary>Titles shown in the model selector, in display order.</summary>
+    public IEnumerable<string>? ModelOptions
+    {
+        get => (IEnumerable<string>?)GetValue(ModelOptionsProperty);
+        set => SetValue(ModelOptionsProperty, value);
+    }
+
+    /// <summary>Raised when the user picks a different model (argument is the selected index).</summary>
+    public event EventHandler<int>? ModelSelectionChanged;
 
     public ObservableCollection<ChatMessage> Messages { get; } = [];
 
@@ -128,6 +155,30 @@ public partial class LightLmChatControl : UserControl
         control.NoticeBanner.Visibility = string.IsNullOrWhiteSpace(text) ? Visibility.Collapsed : Visibility.Visible;
     }
 
+    private static void OnMultiModelEnabledChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var control = (LightLmChatControl)d;
+        if (control.ModelSelector is null) return;
+        control.ModelSelector.Visibility = (bool)e.NewValue ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private static void OnModelOptionsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        var control = (LightLmChatControl)d;
+        if (control.ModelSelector is null) return;
+        control._suppressModelSelectionChanged = true;
+        control.ModelSelector.ItemsSource = e.NewValue as System.Collections.IEnumerable;
+        control.ModelSelector.SelectedIndex = control.ModelSelector.Items.Count > 0 ? 0 : -1;
+        control._suppressModelSelectionChanged = false;
+    }
+
+    private void ModelSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressModelSelectionChanged) return;
+        if (ModelSelector.SelectedIndex >= 0)
+            ModelSelectionChanged?.Invoke(this, ModelSelector.SelectedIndex);
+    }
+
     private async Task SendCurrentAsync()
     {
         if (_requestCancellation is not null) return;
@@ -193,6 +244,7 @@ public partial class LightLmChatControl : UserControl
         CancelButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         Composer.IsEnabled = !busy;
         ClearButton.IsEnabled = !busy;
+        ModelSelector.IsEnabled = !busy;
         if (busy) StatusLabel.Text = "Working…";
         UpdateComposerState();
     }

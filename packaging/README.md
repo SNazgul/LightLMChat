@@ -26,13 +26,15 @@ developers can still override it via the config file.
 ## How to build the bundle
 
 The large third-party files (engine and model) are never committed to Git. Building the bundle is
-a two-step process on a machine with internet access. Two models are pinned in the manifest; pick
+a two-step process on a machine with internet access. Four models are pinned in the manifest; pick
 one with `-Model` (the default is `granite-350m`):
 
 ```powershell
 # 1. Download and verify the pinned engine and the model you want (one-time).
 .\scripts\prepare-runtime.ps1                      # IBM Granite 4.0 350M (~378 MB)
-.\scripts\prepare-runtime.ps1 -Model qwen2.5-1.5b  # Qwen2.5 1.5B (~1.9 GB)
+.\scripts\prepare-runtime.ps1 -Model qwen2.5-1.5b  # Qwen2.5 1.5B (~1.1 GB)
+.\scripts\prepare-runtime.ps1 -Model qwen3-0.6b    # Qwen3 0.6B (~610 MB)
+.\scripts\prepare-runtime.ps1 -Model smollm3-3b    # SmolLM3 3B (~1.9 GB)
 
 # 2. Assemble the bundle (dist/) and optionally zip it.
 .\scripts\pack.ps1 -Zip -Model qwen2.5-1.5b
@@ -40,10 +42,12 @@ one with `-Model` (the default is `granite-350m`):
 
 Available models (keys for `-Model`):
 
-| Key | Model | Size (Q8_0) |
+| Key | Model | Size |
 | --- | --- | ---: |
 | `granite-350m` | IBM Granite 4.0 350M Instruct | ~378 MB |
-| `qwen2.5-1.5b` | Qwen2.5 1.5B Instruct | ~1.9 GB |
+| `qwen2.5-1.5b` | Qwen2.5 1.5B Instruct | ~1.1 GB |
+| `qwen3-0.6b` | Qwen3 0.6B Instruct | ~610 MB |
+| `smollm3-3b` | SmolLM3 3B Instruct | ~1.9 GB |
 
 For a truly offline target (no .NET installed either), publish with the .NET runtime bundled:
 

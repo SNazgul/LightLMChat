@@ -26,7 +26,8 @@ public sealed class LlamaChatSession : IChatSession
     public LlamaChatSession(
         LlamaServerRuntime runtime, ToolCatalog? catalog = null, IToolApprovalService? approval = null,
         bool forceSingleTool = false, ChatRequestLimits? limits = null, string? systemPrompt = null,
-        bool enableThinking = false, bool reasonAboutToolResults = false)
+        bool enableThinking = false, bool reasonAboutToolResults = false,
+        List<(string Role, string Content)>? history = null)
     {
         _runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
         _catalog = catalog;
@@ -38,6 +39,9 @@ public sealed class LlamaChatSession : IChatSession
         _systemPrompt = systemPrompt ?? DefaultSystemPrompt;
         _enableThinking = enableThinking;
         _reasonAboutToolResults = reasonAboutToolResults;
+        // Sharing one list across sessions carries the conversation over when
+        // the host switches models, and Reset() clears it for every session.
+        _history = history ?? [];
         if (catalog is not null) _broker = new ToolBroker(catalog, approval);
     }
 

@@ -10,10 +10,27 @@ namespace LightLMChat.ExampleApp;
 
 public partial class MainWindow : Window
 {
+    private const string CatalogSystemPrompt =
+        "You are a helpful assistant for an IBM PC parts catalog (286-486 era). " +
+        "Use tools to look up catalog facts. For CPU-only questions, use compare_cpus; " +
+        "use recommend_build only when the user asks for a complete PC. " +
+        "The catalog contains CPUs, prices, and basic specifications, but no benchmarks. " +
+        "If the user asks for the best CPU without a measurable criterion, explain " +
+        "that you cannot rank overall performance and ask whether price or listed " +
+        "clock speed matters. Never invent catalog facts. After a tool call, use " +
+        "only the returned data and state when it cannot support a conclusion.";
+
+    private sealed record ModelConfig(string Title, string ServerPath, string ModelPath);
+
     private readonly PcPartsCatalog _catalog = new();
     private readonly ObservableCollection<PcPart> _visibleParts = [];
-    private LlamaServerRuntime? _runtime;
     private readonly CancellationTokenSource _lifetime = new();
+    private readonly List<LlamaServerRuntime> _runtimes = [];
+    private readonly List<(string Role, string Content)> _sharedHistory = [];
+    private readonly List<ModelConfig> _models = [];
+    private readonly Dictionary<int, LlamaChatSession> _sessions = [];
+    private int _activeModelIndex = -1;
+    private bool _switchingModel;
 
     public MainWindow()
     {
@@ -63,11 +80,16 @@ public partial class MainWindow : Window
         return null;
     }
 
-    private static (string? Server, string? Model) LoadConfiguration()
+    private static bool IsThinkingModel(string modelPath) =>
+        Path.GetFileName(modelPath).StartsWith("Qwen3-", StringComparison.OrdinalIgnoreCase) ||
+        Path.GetFileName(modelPath).StartsWith("SmolLM3-", StringComparison.OrdinalIgnoreCase);
+
+    private static (string? Server, string? Model, List<ModelConfig> Models) LoadConfiguration()
     {
+        var models = new List<ModelConfig>();
         var configPath = Path.Combine(AppContext.BaseDirectory, "lightlmchat.config.json");
         if (!File.Exists(configPath))
-            return (null, null);
+            return (null, null, models);
 
         using var doc = JsonDocument.Parse(File.ReadAllText(configPath));
         var root = doc.RootElement;
@@ -77,15 +99,25 @@ public partial class MainWindow : Window
         string? model = root.TryGetProperty("modelPath", out var m) && m.ValueKind == JsonValueKind.String
             ? m.GetString()
             : null;
-        return (server, model);
+
+        if (root.TryGetProperty("models", out var array) && array.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in array.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object) continue;
+                var title = item.TryGetProperty("title", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null;
+                var entryServer = item.TryGetProperty("serverPath", out var es) && es.ValueKind == JsonValueKind.String ? es.GetString() : null;
+                var entryModel = item.TryGetProperty("modelPath", out var em) && em.ValueKind == JsonValueKind.String ? em.GetString() : null;
+                if (!string.IsNullOrWhiteSpace(title) && !string.IsNullOrWhiteSpace(entryModel))
+                    models.Add(new ModelConfig(title!, entryServer ?? "", entryModel!));
+            }
+        }
+
+        return (server, model, models);
     }
 
-    private static (string? Server, string? Model) ResolveRuntime()
+    private static (string? Server, string? Model) ResolvePaths(string? server, string? model)
     {
-        // lightlmchat.config.json takes precedence; otherwise auto-discover the runtime
-        // (a bundled runtime/ folder, or the scripts/prepare-runtime.ps1 layout).
-        var (server, model) = LoadConfiguration();
-
         var baseDir = AppContext.BaseDirectory;
         var cwd = Directory.GetCurrentDirectory();
 
@@ -106,10 +138,57 @@ public partial class MainWindow : Window
         return (server, model);
     }
 
+    private async Task<LlamaChatSession> CreateSessionAsync(string server, string model)
+    {
+        var enableThinking = IsThinkingModel(model);
+        var runtime = await LlamaServerRuntime.StartAsync(
+            new LlamaServerOptions(server, model,
+                ContextSize: enableThinking ? 4096 : 2048,
+                ReasoningBudget: enableThinking ? 256 : null),
+            _lifetime.Token);
+        _runtimes.Add(runtime);
+
+        var tools = new ToolCatalog([
+            new SearchPartsTool(_catalog),
+            new CompareCpusTool(_catalog),
+            new ListPartTypesTool(_catalog),
+            new RecommendBuildTool(_catalog)
+        ]);
+        return new LlamaChatSession(runtime, tools,
+            limits: new ChatRequestLimits { MaxGenerationTokens = enableThinking ? 1024 : 256 },
+            enableThinking: enableThinking,
+            reasonAboutToolResults: false,
+            history: _sharedHistory,
+            systemPrompt: CatalogSystemPrompt);
+    }
+
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        var (server, model) = ResolveRuntime();
-        if (string.IsNullOrWhiteSpace(server) || string.IsNullOrWhiteSpace(model))
+        var (server, model, models) = LoadConfiguration();
+
+        // Multi-model mode: the config's `models` array wins when it is usable.
+        var resolvedModels = new List<ModelConfig>();
+        foreach (var entry in models)
+        {
+            var entryServer = string.IsNullOrWhiteSpace(entry.ServerPath) ? server : entry.ServerPath;
+            var (s, m) = ResolvePaths(entryServer, entry.ModelPath);
+            if (!string.IsNullOrWhiteSpace(s) && !string.IsNullOrWhiteSpace(m))
+                resolvedModels.Add(new ModelConfig(entry.Title, s, m));
+        }
+
+        if (resolvedModels.Count > 0)
+        {
+            _models.AddRange(resolvedModels);
+            Chat.MultiModelEnabled = true;
+            Chat.ModelOptions = _models.Select(x => x.Title).ToList();
+            Chat.ModelSelectionChanged += Chat_ModelSelectionChanged;
+            await SwitchModelAsync(0);
+            return;
+        }
+
+        // Single-model mode.
+        var (resolvedServer, resolvedModel) = ResolvePaths(server, model);
+        if (string.IsNullOrWhiteSpace(resolvedServer) || string.IsNullOrWhiteSpace(resolvedModel))
         {
             ShowModelNotice(
                 "Local model not found. Run scripts/prepare-runtime.ps1 to download the engine and model, or set their paths in lightlmchat.config.json. The catalog is still browsable.",
@@ -120,39 +199,9 @@ public partial class MainWindow : Window
         ShowModelNotice("Starting local model…");
         try
         {
-            var enableThinking = Path.GetFileName(model).StartsWith("Qwen3-", StringComparison.OrdinalIgnoreCase)
-                || Path.GetFileName(model).StartsWith("SmolLM3-", StringComparison.OrdinalIgnoreCase);
-            var runtime = await LlamaServerRuntime.StartAsync(
-                new LlamaServerOptions(server, model,
-                    ContextSize: enableThinking ? 4096 : 2048,
-                    ReasoningBudget: enableThinking ? 256 : null),
-                _lifetime.Token);
-            if (_lifetime.IsCancellationRequested)
-            {
-                await runtime.DisposeAsync();
-                return;
-            }
-            _runtime = runtime;
-
-            var tools = new ToolCatalog([
-                new SearchPartsTool(_catalog),
-                new CompareCpusTool(_catalog),
-                new ListPartTypesTool(_catalog),
-                new RecommendBuildTool(_catalog)
-            ]);
-            Chat.Session = new LlamaChatSession(_runtime, tools,
-                limits: new ChatRequestLimits { MaxGenerationTokens = enableThinking ? 1024 : 256 },
-                enableThinking: enableThinking,
-                reasonAboutToolResults: false,
-                systemPrompt:
-                "You are a helpful assistant for an IBM PC parts catalog (286-486 era). " +
-                "Use tools to look up catalog facts. For CPU-only questions, use compare_cpus; " +
-                "use recommend_build only when the user asks for a complete PC. " +
-                "The catalog contains CPUs, prices, and basic specifications, but no benchmarks. " +
-                "If the user asks for the best CPU without a measurable criterion, explain " +
-                "that you cannot rank overall performance and ask whether price or listed " +
-                "clock speed matters. Never invent catalog facts. After a tool call, use " +
-                "only the returned data and state when it cannot support a conclusion.");
+            var session = await CreateSessionAsync(resolvedServer, resolvedModel);
+            if (_lifetime.IsCancellationRequested) return;
+            Chat.Session = session;
             ShowModelNotice("Local model active — ask about IBM PC parts (286–486), e.g. \"What Intel 486 CPUs do you have?\"");
         }
         catch (FileNotFoundException)
@@ -171,6 +220,48 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void Chat_ModelSelectionChanged(object? sender, int index) => await SwitchModelAsync(index);
+
+    private async Task SwitchModelAsync(int index)
+    {
+        if (_switchingModel) return;
+        if (index == _activeModelIndex && _sessions.ContainsKey(index)) return;
+
+        _switchingModel = true;
+        Chat.NoticeText = $"Starting {_models[index].Title}…";
+        try
+        {
+            if (!_sessions.TryGetValue(index, out var session))
+            {
+                var entry = _models[index];
+                try
+                {
+                    session = await CreateSessionAsync(entry.ServerPath, entry.ModelPath);
+                }
+                catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+                {
+                    Chat.NoticeText = string.Empty;
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Chat.NoticeText = $"Could not start {entry.Title}: {ex.Message}";
+                    return;
+                }
+                _sessions[index] = session;
+            }
+
+            _activeModelIndex = index;
+            Chat.Session = session;
+            Chat.NoticeText = string.Empty;
+            ShowModelNotice($"Model: {_models[index].Title}");
+        }
+        finally
+        {
+            _switchingModel = false;
+        }
+    }
+
     private void ShowModelNotice(string text, bool inChat = false)
     {
         ModelBannerText.Text = text;
@@ -181,7 +272,7 @@ public partial class MainWindow : Window
     private async void OnClosed(object? sender, EventArgs e)
     {
         _lifetime.Cancel();
-        if (_runtime is not null) await _runtime.DisposeAsync();
+        foreach (var runtime in _runtimes) await runtime.DisposeAsync();
         _lifetime.Dispose();
     }
 }

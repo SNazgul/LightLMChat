@@ -7,7 +7,7 @@ LightLMChat is an early-stage, embeddable **offline chat component for .NET desk
 - **UI:** reusable .NET 10 WPF chat control with streamed responses, cancellation, activity display, and a clear-chat action.
 - **SDK:** WPF-independent .NET DLLs for chat sessions, tool contracts, catalog validation, and runtime management.
 - **Inference:** a managed launcher for `llama-server`, bound to localhost for offline operation. Engine binaries will be packaged later.
-- **Models:** IBM Granite 4.0 350M Instruct (default, ~378 MB) and Qwen2.5 1.5B Instruct (~1.9 GB), both GGUF Q8_0. Pick one with `prepare-runtime.ps1 -Model`.
+- **Models:** IBM Granite 4.0 350M Instruct (default, ~378 MB), Qwen2.5 1.5B Instruct (~1.1 GB), Qwen3 0.6B Instruct (~610 MB), and SmolLM3 3B Instruct (~1.9 GB). Pick one with `prepare-runtime.ps1 -Model`.
 - **Host integration:** applications register a small catalog of typed read and write operations, each declaring its purpose, input/output JSON schemas, and usage examples. The model selects and calls them dynamically; the SDK validates every proposed call against the schema. The host controls permissions, executes tools, and approves writes.
 
 The first release targets **Windows x64 PCs with 8 GB RAM and a modern 4-core CPU**. A dedicated GPU is not required. CPU inference is the baseline; integrated GPU acceleration is optional and will be enabled only when measurements show a benefit.
@@ -32,17 +32,19 @@ The runtime is designed to work after installation with the network disconnected
 
 ### Option A — set up by script (recommended)
 
-`scripts/prepare-runtime.ps1` downloads the pinned llama.cpp engine and a model, verifies their SHA-256 hashes against [the manifest](docs/model-and-runtime-manifest.json), and writes the chosen paths into `lightlmchat.config.json` so the app uses that model. Two models are available (`-Model`, default `granite-350m`):
+`scripts/prepare-runtime.ps1` downloads the pinned llama.cpp engine and a model, verifies their SHA-256 hashes against [the manifest](docs/model-and-runtime-manifest.json), and writes the chosen paths into `lightlmchat.config.json` so the app uses that model. Four models are available (`-Model`, default `granite-350m`):
 
 ```powershell
 .\scripts\prepare-runtime.ps1                      # IBM Granite 4.0 350M (~378 MB)
-.\scripts\prepare-runtime.ps1 -Model qwen2.5-1.5b  # Qwen2.5 1.5B (~1.9 GB), smarter
+.\scripts\prepare-runtime.ps1 -Model qwen2.5-1.5b  # Qwen2.5 1.5B (~1.1 GB), smarter
+.\scripts\prepare-runtime.ps1 -Model qwen3-0.6b    # Qwen3 0.6B (~610 MB), newer/smaller
+.\scripts\prepare-runtime.ps1 -Model smollm3-3b    # SmolLM3 3B (~1.9 GB)
 ```
 
 ### Option B — set up manually
 
 1. Download a Windows CPU `llama-server` build from [llama.cpp releases](https://github.com/ggml-org/llama.cpp/releases) and unpack it.
-2. Download a GGUF model, e.g. [Granite 4.0 350M Q8_0](https://huggingface.co/ibm-granite/granite-4.0-350m-GGUF) or [Qwen2.5 1.5B Q8_0](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF).
+2. Download a GGUF model, e.g. [Granite 4.0 350M Q8_0](https://huggingface.co/ibm-granite/granite-4.0-350m-GGUF), [Qwen2.5 1.5B Q8_0](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF), [Qwen3 0.6B Q8_0](https://huggingface.co/Qwen/Qwen3-0.6B-GGUF), or [SmolLM3 3B Q8_0](https://huggingface.co/mradermacher/SmolLM3-3B-GGUF).
 3. Put their paths in `samples/LightLMChat.ExampleApp/lightlmchat.config.json`:
 
 ```json
@@ -50,6 +52,22 @@ The runtime is designed to work after installation with the network disconnected
 ```
 
 Leaving either value empty (`""`) makes the app auto-discover it: a `runtime/` folder next to the app, or the repo's `models/` and `artifacts/` folders.
+
+### Multiple models
+
+To let users switch between several local models, add a `models` array to `lightlmchat.config.json`. When it is non-empty, the chat control shows a model selector (the host enables it via `LightLmChatControl.MultiModelEnabled`). Each entry needs a `title` and a `modelPath`; `serverPath` may be omitted to reuse the top-level value or auto-discovery:
+
+```json
+{
+  "serverPath": "C:\\path\\to\\llama-server.exe",
+  "models": [
+    { "title": "Granite 350M", "modelPath": "C:\\path\\to\\granite-4.0-350m-Q8_0.gguf" },
+    { "title": "Qwen3 0.6B",   "modelPath": "C:\\path\\to\\Qwen3-0.6B-Q8_0.gguf" }
+  ]
+}
+```
+
+Switching models keeps the conversation: the prior history is shared with the newly selected model so it can answer in context. The Clear chat action resets it for all models. Each model's engine starts lazily on its first selection and stays resident for fast switching.
 
 ### Run the example
 

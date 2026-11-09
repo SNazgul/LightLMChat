@@ -54,6 +54,10 @@
                 <StackPanel>
                     <TextBlock Text="LightLMChat" FontWeight="SemiBold" FontSize="16" />
                     <TextBlock Text="Local application assistant" Opacity="0.7" />
+                    <ComboBox x:Name="ModelSelector" Margin="0,8,0,0" MaxWidth="360"
+                              HorizontalAlignment="Left" Visibility="Collapsed"
+                              SelectionChanged="ModelSelector_SelectionChanged"
+                              AutomationProperties.Name="Model" />
                 </StackPanel>
             </DockPanel>
         </Border>

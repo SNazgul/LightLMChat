@@ -20,9 +20,25 @@
     "qwen2.5-1.5b": {
       "name": "Qwen2.5 1.5B Instruct",
       "project": "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
-      "file": "qwen2.5-1.5b-instruct-q8_0.gguf",
-      "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q8_0.gguf",
-      "sha256": "d7efb072e7724d25048a4fda0a3e10b04bdef5d06b1403a1c93bd9f1240a63c8",
+      "file": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "sha256": "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+      "license": "Apache-2.0"
+    },
+    "qwen3-0.6b": {
+      "name": "Qwen3 0.6B Instruct",
+      "project": "Qwen/Qwen3-0.6B-GGUF",
+      "file": "Qwen3-0.6B-Q8_0.gguf",
+      "url": "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf",
+      "sha256": "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
+      "license": "Apache-2.0"
+    },
+    "smollm3-3b": {
+      "name": "SmolLM3 3B Instruct",
+      "project": "mradermacher/SmolLM3-3B-GGUF",
+      "file": "SmolLM3-3B.Q4_K_M.gguf",
+      "url": "https://huggingface.co/mradermacher/SmolLM3-3B-GGUF/resolve/main/SmolLM3-3B.Q4_K_M.gguf",
+      "sha256": "a9cd572c1ea1eac5f3441ee90c536f02e646a8bb743f40f2f850d8ae954f48c2",
       "license": "Apache-2.0"
     }
   }
